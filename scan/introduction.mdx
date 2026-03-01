@@ -1,0 +1,163 @@
+---
+title: Security Scanner Introduction
+description: AI-powered security scanner for detecting hardcoded secrets, PII leaks, exposed routes, and vulnerabilities in your codebase
+---
+
+# Security Scanner
+
+**Cencori Scan** is a security scanner for AI apps that detects hardcoded secrets, PII leaks, exposed routes, and security vulnerabilities — with AI-powered auto-fix.
+
+## Quick Start
+
+```bash
+npx @cencori/scan
+```
+
+That's it. Run it in any project directory to instantly scan for security issues.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Pattern-Based Scanning" icon="magnifying-glass">
+    Detects 50+ types of secrets, PII, and vulnerabilities using advanced regex patterns
+  </Card>
+  
+  <Card title="AI Auto-Fix" icon="wand-magic-sparkles">
+    Automatically fixes issues with one command using Cencori AI
+  </Card>
+  
+  <Card title="Lightning Fast" icon="bolt">
+    Scans thousands of files in seconds with optimized performance
+  </Card>
+  
+  <Card title="Zero Configuration" icon="circle-check">
+    Works out of the box with sensible defaults — no config needed
+  </Card>
+</CardGroup>
+
+## What It Detects
+
+### Secrets & API Keys
+
+Detects hardcoded API keys from 20+ providers:
+- OpenAI (`sk-...`, `sk-proj-...`)
+- Anthropic (`sk-ant-...`)
+- Google AI (`AIza...`)
+- Supabase, Stripe, AWS, GitHub
+- Firebase, SendGrid, Twilio, and more
+
+### Personal Information (PII)
+
+Identifies sensitive personal data in your code:
+- Email addresses
+- Phone numbers (US & International)
+- Social Security Numbers
+- Credit card numbers
+
+### Security Vulnerabilities
+
+Finds common security issues:
+- SQL injection patterns
+- XSS vulnerabilities (`innerHTML`, `dangerouslySetInnerHTML`)
+- Insecure CORS configuration
+- Hardcoded passwords
+- Debug modes in production
+- Eval usage and code execution risks
+
+### Exposed Routes
+
+Detects unprotected API routes:
+- Next.js API routes without authentication
+- Express routes without auth middleware
+- Dashboard/admin routes without protection
+
+## Security Scoring
+
+Every scan provides an **A through F tier grading**:
+
+<ResponseField name="A-Tier" type="Excellent">
+  No security issues detected
+</ResponseField>
+
+<ResponseField name="B-Tier" type="Good">
+  Minor improvements recommended
+</ResponseField>
+
+<ResponseField name="C-Tier" type="Fair">
+  Some concerns need attention
+</ResponseField>
+
+<ResponseField name="D-Tier" type="Poor">
+  Significant issues found
+</ResponseField>
+
+<ResponseField name="F-Tier" type="Critical">
+  Secrets or major vulnerabilities exposed
+</ResponseField>
+
+## Example Output
+
+```
+  Cencori Scan
+  v0.4.8
+
+✔ Scanned 142 files
+
+  ┌─────────────────────────────────────────────┐
+  │   Security Score: D-Tier                    │
+  └─────────────────────────────────────────────┘
+
+  Poor! Significant security issues found.
+
+  SECRETS (3)
+  ├─ src/api.ts:12  sk-proj-****
+  │  Hardcoded API key - use environment variables
+  ├─ src/lib.ts:5   eyJh****
+  │  Supabase service role key exposed
+  └─ .env.local:3   ANTH****
+     Anthropic API key in tracked file
+
+  VULNERABILITIES (2)
+  ├─ src/db.ts:45  `SELECT * FROM users WHERE id = ${userId}`
+  │  Potential SQL injection - use parameterized queries
+  └─ src/page.tsx:23  dangerouslySetInnerHTML={{ __html: content }}
+     XSS vulnerability - sanitize content first
+
+? Would you like Cencori to auto-fix these issues? (y/n)
+```
+
+## Links
+
+<CardGroup cols={3}>
+  <Card title="Web Scanner" icon="globe" href="https://scan.cencori.com">
+    Scan GitHub repos online
+  </Card>
+  
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View scan history & API keys
+  </Card>
+  
+  <Card title="GitHub" icon="github" href="https://github.com/cencori/cencori">
+    View source code
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/scan/installation">
+    Install the scanner globally or use with npx
+  </Card>
+  
+  <Card title="CLI Usage" icon="terminal" href="/scan/cli-usage">
+    Learn all CLI commands and options
+  </Card>
+  
+  <Card title="AI Auto-Fix" icon="wand-magic-sparkles" href="/scan/ai-autofix">
+    Set up AI-powered automatic fixes
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="code-branch" href="/scan/ci-cd-integration">
+    Add to your GitHub Actions workflow
+  </Card>
+</CardGroup>

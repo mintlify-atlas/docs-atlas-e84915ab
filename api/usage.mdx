@@ -1,0 +1,481 @@
+---
+title: 'Usage Tracking'
+description: 'Track API usage, costs, and quotas'
+---
+
+## Overview
+
+Cencori provides detailed usage tracking and analytics for:
+
+- Request volume and patterns
+- Token usage by model
+- Cost breakdown by provider
+- Rate limit monitoring
+- Quota consumption
+
+## Authentication
+
+Usage endpoints require dashboard authentication (user session).
+
+## Get Usage Overview
+
+```
+GET /api/projects/{projectId}/analytics/overview
+```
+
+Get high-level usage statistics for a project.
+
+### Query Parameters
+
+<ParamField query="time_range" type="string">
+  Time range for analytics
+  
+  Options:
+  - `1h` - Last hour
+  - `24h` - Last 24 hours (default)
+  - `7d` - Last 7 days
+  - `30d` - Last 30 days
+  - `90d` - Last 90 days
+  - `all` - All time
+</ParamField>
+
+### Response
+
+```json
+{
+  "time_range": "24h",
+  "total_requests": 15420,
+  "successful_requests": 15213,
+  "failed_requests": 207,
+  "success_rate": 98.7,
+  
+  "tokens": {
+    "prompt_tokens": 1258392,
+    "completion_tokens": 1200000,
+    "total_tokens": 2458392
+  },
+  
+  "costs": {
+    "provider_cost": 125.45,
+    "cencori_charge": 145.23,
+    "markup_percentage": 15.8,
+    "by_provider": {
+      "openai": 65.32,
+      "anthropic": 45.21,
+      "google": 34.70
+    }
+  },
+  
+  "performance": {
+    "avg_latency_ms": 432,
+    "p50_latency_ms": 380,
+    "p95_latency_ms": 892,
+    "p99_latency_ms": 1543
+  },
+  
+  "top_models": [
+    {
+      "model": "gemini-2.0-flash",
+      "requests": 8234,
+      "cost": 45.23
+    },
+    {
+      "model": "gpt-4o",
+      "requests": 4521,
+      "cost": 67.89
+    },
+    {
+      "model": "claude-3.5-sonnet",
+      "requests": 2665,
+      "cost": 32.11
+    }
+  ],
+  
+  "top_endpoints": [
+    {"endpoint": "chat", "requests": 12340},
+    {"endpoint": "embeddings", "requests": 2100},
+    {"endpoint": "images/generate", "requests": 980}
+  ]
+}
+```
+
+## Get Usage Trends
+
+```
+GET /api/projects/{projectId}/analytics/trends
+```
+
+Get time-series data for usage trends.
+
+### Query Parameters
+
+<ParamField query="time_range" type="string">
+  Time range: `24h`, `7d`, `30d`, `90d`
+</ParamField>
+
+<ParamField query="interval" type="string">
+  Data point interval
+  
+  Options:
+  - `hour` - Hourly data points
+  - `day` - Daily data points (default)
+  - `week` - Weekly data points
+</ParamField>
+
+<ParamField query="metrics" type="string">
+  Comma-separated metrics to include
+  
+  Options: `requests`, `tokens`, `cost`, `latency`, `errors`
+  
+  Default: all metrics
+</ParamField>
+
+### Response
+
+```json
+{
+  "interval": "day",
+  "data": [
+    {
+      "timestamp": "2024-03-01T00:00:00Z",
+      "requests": 1245,
+      "tokens": 245893,
+      "cost": 12.34,
+      "avg_latency_ms": 423,
+      "errors": 15
+    },
+    {
+      "timestamp": "2024-03-02T00:00:00Z",
+      "requests": 1432,
+      "tokens": 289234,
+      "cost": 14.56,
+      "avg_latency_ms": 398,
+      "errors": 12
+    }
+    // ...
+  ]
+}
+```
+
+## Get Quota Status
+
+```
+GET /api/organizations/{organizationId}/usage
+```
+
+Get current quota and usage for an organization.
+
+### Response
+
+```json
+{
+  "subscription_tier": "pro",
+  "billing_period": {
+    "start": "2024-03-01T00:00:00Z",
+    "end": "2024-04-01T00:00:00Z"
+  },
+  
+  "requests": {
+    "used": 15420,
+    "limit": 50000,
+    "percentage": 30.8,
+    "remaining": 34580
+  },
+  
+  "credits": {
+    "balance": 85.45,
+    "spent_this_month": 145.23,
+    "auto_recharge_enabled": true,
+    "auto_recharge_amount": 100.00
+  },
+  
+  "spend_cap": {
+    "enabled": true,
+    "limit": 500.00,
+    "current": 145.23,
+    "percentage": 29.0
+  },
+  
+  "rate_limits": {
+    "requests_per_minute": 1000,
+    "tokens_per_minute": 100000,
+    "current_rpm": 234,
+    "current_tpm": 23456
+  }
+}
+```
+
+## Examples
+
+### Get Today's Usage
+
+```bash
+curl "https://api.cencori.com/api/projects/proj_123/analytics/overview?time_range=24h" \
+  -H "Cookie: session=..."
+```
+
+### Get Weekly Trends
+
+```bash
+curl "https://api.cencori.com/api/projects/proj_123/analytics/trends?time_range=7d&interval=day" \
+  -H "Cookie: session=..."
+```
+
+### Monitor Quota
+
+```typescript
+const orgId = 'org_abc123';
+
+async function checkQuota() {
+  const response = await fetch(
+    `https://api.cencori.com/api/organizations/${orgId}/usage`,
+    {
+      headers: { 'Cookie': `session=${sessionToken}` }
+    }
+  );
+  
+  const data = await response.json();
+  
+  if (data.requests.percentage > 80) {
+    console.warn('Warning: 80% of monthly quota used');
+  }
+  
+  if (data.credits.balance < 10) {
+    console.error('Low credit balance!');
+  }
+  
+  return data;
+}
+```
+
+### Track Cost by Model
+
+```typescript
+async function getCostBreakdown(projectId: string, days: number = 30) {
+  const response = await fetch(
+    `https://api.cencori.com/api/projects/${projectId}/analytics/overview?time_range=${days}d`
+  );
+  
+  const data = await response.json();
+  
+  console.log('Total cost:', data.costs.cencori_charge);
+  console.log('\nCost by provider:');
+  
+  for (const [provider, cost] of Object.entries(data.costs.by_provider)) {
+    console.log(`  ${provider}: $${cost}`);
+  }
+  
+  console.log('\nTop models:');
+  data.top_models.forEach((m: any) => {
+    console.log(`  ${m.model}: ${m.requests} requests, $${m.cost}`);
+  });
+}
+```
+
+### Build Usage Dashboard
+
+```typescript
+import { Line } from 'react-chartjs-2';
+
+function UsageDashboard({ projectId }: { projectId: string }) {
+  const [trends, setTrends] = useState(null);
+  
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/analytics/trends?time_range=7d`)
+      .then(r => r.json())
+      .then(setTrends);
+  }, [projectId]);
+  
+  if (!trends) return <div>Loading...</div>;
+  
+  const chartData = {
+    labels: trends.data.map(d => new Date(d.timestamp).toLocaleDateString()),
+    datasets: [
+      {
+        label: 'Requests',
+        data: trends.data.map(d => d.requests),
+        borderColor: 'rgb(75, 192, 192)'
+      },
+      {
+        label: 'Errors',
+        data: trends.data.map(d => d.errors),
+        borderColor: 'rgb(255, 99, 132)'
+      }
+    ]
+  };
+  
+  return <Line data={chartData} />;
+}
+```
+
+### Alert on High Usage
+
+```typescript
+setInterval(async () => {
+  const usage = await checkQuota();
+  
+  if (usage.requests.percentage > 90) {
+    await sendAlert({
+      type: 'quota_warning',
+      message: `${usage.requests.percentage}% of monthly quota used`,
+      requests: usage.requests
+    });
+  }
+  
+  if (usage.spend_cap.percentage > 90) {
+    await sendAlert({
+      type: 'spend_cap_warning',
+      message: `${usage.spend_cap.percentage}% of spend cap reached`,
+      spend: usage.spend_cap
+    });
+  }
+}, 60000); // Check every minute
+```
+
+## Usage Metrics
+
+### Request Status
+
+- `success` - Request completed successfully
+- `error` - Request failed
+- `filtered` - Blocked by content policy
+- `blocked` - Blocked by security rules
+- `rate_limited` - Rate limit exceeded
+- `success_fallback` - Succeeded using fallback provider
+
+### Cost Metrics
+
+- `provider_cost` - Direct cost from AI provider
+- `cencori_charge` - Total cost including markup
+- `markup_percentage` - Applied markup rate
+
+### Latency Metrics
+
+- `avg_latency_ms` - Mean latency
+- `p50_latency_ms` - Median latency
+- `p95_latency_ms` - 95th percentile
+- `p99_latency_ms` - 99th percentile
+
+## Subscription Tiers
+
+### Free Tier
+
+- 1,000 requests/month
+- Community support
+- Basic analytics
+
+### Pro Tier
+
+- 50,000 requests/month
+- Priority support
+- Advanced analytics
+- Custom rate limits
+
+### Enterprise Tier
+
+- Unlimited requests
+- Dedicated support
+- Custom pricing
+- SLA guarantees
+- White-label option
+
+## Cost Optimization Tips
+
+### 1. Choose Cheaper Models
+
+```typescript
+// Expensive: GPT-4o
+const cost1 = await estimateCost('gpt-4o', 1000);
+console.log('GPT-4o:', cost1); // ~$0.03
+
+// Cheaper: Gemini 2.0 Flash
+const cost2 = await estimateCost('gemini-2.0-flash', 1000);
+console.log('Gemini:', cost2); // ~$0.001
+```
+
+### 2. Reduce Token Usage
+
+```typescript
+// Use shorter prompts
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{role: 'user', content: 'Summarize in 50 words'}],
+  max_tokens: 100 // Limit output
+});
+```
+
+### 3. Cache Responses
+
+```typescript
+const cache = new Map();
+
+function cachedRequest(prompt: string) {
+  if (cache.has(prompt)) {
+    return cache.get(prompt);
+  }
+  
+  const response = await makeRequest(prompt);
+  cache.set(prompt, response);
+  return response;
+}
+```
+
+### 4. Use Streaming Wisely
+
+```typescript
+// Don't stream if you don't need it
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{role: 'user', content: prompt}],
+  stream: false // Slightly more efficient
+});
+```
+
+### 5. Implement Debouncing
+
+```typescript
+import { debounce } from 'lodash';
+
+// Debounce user input
+const debouncedSearch = debounce(async (query) => {
+  const results = await searchMemories(query);
+  setResults(results);
+}, 500); // Wait 500ms after typing stops
+```
+
+## Budget Alerts
+
+Set up automatic alerts:
+
+```typescript
+const budget = await fetch(
+  `/api/projects/${projectId}/budget`,
+  {
+    method: 'PATCH',
+    body: JSON.stringify({
+      spend_cap: 500.00,
+      alert_threshold: 80, // Alert at 80%
+      alerts_enabled: true
+    })
+  }
+);
+```
+
+You'll receive email alerts when:
+- 80% of budget reached
+- 90% of budget reached
+- 100% of budget reached
+
+## Export Usage Data
+
+```
+GET /api/projects/{projectId}/export
+```
+
+Export usage data as CSV for accounting.
+
+```bash
+curl "https://api.cencori.com/api/projects/proj_123/export?time_range=30d" \
+  -H "Cookie: session=..." \
+  --output usage-march-2024.csv
+```

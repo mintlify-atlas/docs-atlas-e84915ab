@@ -1,0 +1,637 @@
+---
+title: Cost Optimization Strategies
+description: Reduce AI costs with model selection, caching, batching, and usage monitoring
+---
+
+# Cost Optimization Strategies
+
+Optimize your AI costs with smart model selection, caching, request batching, and usage monitoring.
+
+## Understanding Pricing
+
+AI providers charge based on tokens (input + output):
+
+```typescript lib/providers/pricing.ts
+export interface ModelPricing {
+  inputPer1KTokens: number;
+  outputPer1KTokens: number;
+  cencoriMarkupPercentage: number;
+}
+
+const defaults: Record<string, ModelPricing> = {
+  openai: {
+    inputPer1KTokens: 0.001,
+    outputPer1KTokens: 0.002,
+    cencoriMarkupPercentage: 50
+  },
+  anthropic: {
+    inputPer1KTokens: 0.003,
+    outputPer1KTokens: 0.015,
+    cencoriMarkupPercentage: 50
+  },
+  google: {
+    inputPer1KTokens: 0.00025,
+    outputPer1KTokens: 0.00075,
+    cencoriMarkupPercentage: 0
+  }
+};
+```
+
+## Model Pricing Comparison
+
+| Model | Input ($/1M tokens) | Output ($/1M tokens) | Best For |
+|-------|---------------------|----------------------|----------|
+| gemini-2.0-flash | $0.25 | $0.75 | Simple tasks, high volume |
+| gpt-3.5-turbo | $1.00 | $2.00 | General purpose |
+| claude-3-haiku | $0.80 | $4.00 | Fast responses |
+| gpt-4o | $5.00 | $15.00 | Complex reasoning |
+| claude-3-5-opus | $15.00 | $75.00 | Highest quality |
+
+## Cost Calculation
+
+```typescript
+function calculateCost(
+  promptTokens: number,
+  completionTokens: number,
+  pricing: ModelPricing
+): number {
+  const inputCost = (promptTokens / 1000) * pricing.inputPer1KTokens;
+  const outputCost = (completionTokens / 1000) * pricing.outputPer1KTokens;
+  const providerCost = inputCost + outputCost;
+  
+  // Apply Cencori markup
+  const totalCost = providerCost * (1 + pricing.cencoriMarkupPercentage / 100);
+  
+  return totalCost;
+}
+
+// Example
+const cost = calculateCost(
+  1000, // 1K input tokens
+  500,  // 500 output tokens
+  {
+    inputPer1KTokens: 0.005,
+    outputPer1KTokens: 0.015,
+    cencoriMarkupPercentage: 50
+  }
+);
+
+console.log(`Cost: $${cost.toFixed(4)}`); // $0.0188
+```
+
+## Strategy 1: Model Selection
+
+Choose the right model for each task:
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Cencori } from '@cencori/sdk';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+class SmartModelSelector {
+  selectModel(task: {
+    complexity: 'simple' | 'moderate' | 'complex';
+    length: 'short' | 'medium' | 'long';
+    quality: 'fast' | 'balanced' | 'premium';
+  }): string {
+    // Simple tasks
+    if (task.complexity === 'simple') {
+      return 'gemini-2.0-flash'; // Cheapest
+    }
+
+    // Moderate complexity
+    if (task.complexity === 'moderate') {
+      if (task.quality === 'fast') {
+        return 'gpt-3.5-turbo';
+      }
+      return 'claude-3-5-sonnet';
+    }
+
+    // Complex tasks
+    if (task.quality === 'premium') {
+      return 'gpt-4o';
+    }
+    return 'claude-3-5-sonnet';
+  }
+
+  async chat(message: string, taskType: any) {
+    const model = this.selectModel(taskType);
+    
+    console.log(`Using ${model} for ${taskType.complexity} task`);
+    
+    return cencori.ai.chat({
+      messages: [{ role: 'user', content: message }],
+      model
+    });
+  }
+}
+
+// Usage
+const selector = new SmartModelSelector();
+
+// Use cheap model for simple tasks
+await selector.chat('What is 2+2?', {
+  complexity: 'simple',
+  length: 'short',
+  quality: 'fast'
+});
+
+// Use premium model for complex tasks
+await selector.chat('Explain quantum entanglement', {
+  complexity: 'complex',
+  length: 'long',
+  quality: 'premium'
+});
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="your-api-key")
+
+class SmartModelSelector:
+    def select_model(self, task):
+        complexity = task.get("complexity")
+        quality = task.get("quality")
+        
+        if complexity == "simple":
+            return "gemini-2.0-flash"
+        
+        if complexity == "moderate":
+            return "gpt-3.5-turbo" if quality == "fast" else "claude-3-5-sonnet"
+        
+        return "gpt-4o" if quality == "premium" else "claude-3-5-sonnet"
+    
+    def chat(self, message: str, task_type: dict):
+        model = self.select_model(task_type)
+        print(f"Using {model} for {task_type['complexity']} task")
+        
+        return cencori.ai.chat(
+            messages=[{"role": "user", "content": message}],
+            model=model
+        )
+
+# Usage
+selector = SmartModelSelector()
+
+selector.chat("What is 2+2?", {
+    "complexity": "simple",
+    "quality": "fast"
+})
+```
+
+</CodeGroup>
+
+## Strategy 2: Response Caching
+
+Cache responses to avoid redundant API calls:
+
+```typescript
+class ResponseCache {
+  private cache = new Map<string, {
+    response: any;
+    timestamp: number;
+    ttl: number;
+  }>();
+
+  private getCacheKey(messages: any[], model: string): string {
+    return JSON.stringify({ messages, model });
+  }
+
+  async get(messages: any[], model: string): Promise<any | null> {
+    const key = this.getCacheKey(messages, model);
+    const cached = this.cache.get(key);
+
+    if (!cached) return null;
+
+    // Check if cache has expired
+    if (Date.now() - cached.timestamp > cached.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    console.log('Cache hit! Saved API call');
+    return cached.response;
+  }
+
+  set(
+    messages: any[],
+    model: string,
+    response: any,
+    ttl: number = 3600000 // 1 hour default
+  ) {
+    const key = this.getCacheKey(messages, model);
+    this.cache.set(key, {
+      response,
+      timestamp: Date.now(),
+      ttl
+    });
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  getStats() {
+    return {
+      size: this.cache.size,
+      keys: Array.from(this.cache.keys())
+    };
+  }
+}
+
+// Usage
+const cache = new ResponseCache();
+
+async function chatWithCache(messages: any[], model: string) {
+  // Check cache first
+  const cached = await cache.get(messages, model);
+  if (cached) return cached;
+
+  // Make API call
+  const response = await cencori.ai.chat({ messages, model });
+
+  // Cache response
+  cache.set(messages, model, response);
+
+  return response;
+}
+
+// First call - hits API
+await chatWithCache(
+  [{ role: 'user', content: 'What is AI?' }],
+  'gpt-4o'
+);
+
+// Second call - hits cache (free!)
+await chatWithCache(
+  [{ role: 'user', content: 'What is AI?' }],
+  'gpt-4o'
+);
+```
+
+## Strategy 3: Prompt Optimization
+
+Reduce token usage with better prompts:
+
+```typescript
+class PromptOptimizer {
+  // Remove unnecessary words
+  optimize(prompt: string): string {
+    return prompt
+      .replace(/please/gi, '')
+      .replace(/kindly/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Use shorter system prompts
+  getSystemPrompt(style: 'verbose' | 'concise'): string {
+    if (style === 'verbose') {
+      return `You are a helpful AI assistant. Please provide detailed and comprehensive answers to user questions. Make sure to be thorough and explain concepts clearly.`;
+    }
+    
+    return `Answer concisely.`;
+  }
+
+  // Estimate token count
+  estimateTokens(text: string): number {
+    // Rough estimation: 1 token ≈ 4 characters
+    return Math.ceil(text.length / 4);
+  }
+}
+
+const optimizer = new PromptOptimizer();
+
+// Before optimization
+const verbose = "Please kindly explain to me what is artificial intelligence";
+const verboseTokens = optimizer.estimateTokens(verbose); // ~12 tokens
+
+// After optimization
+const concise = optimizer.optimize(verbose);
+const conciseTokens = optimizer.estimateTokens(concise); // ~8 tokens
+
+console.log(`Saved ${verboseTokens - conciseTokens} tokens (33% reduction)`);
+```
+
+## Strategy 4: Token Limits
+
+Set appropriate max_tokens to avoid overspending:
+
+```typescript
+const taskLimits: Record<string, number> = {
+  classification: 10,
+  extraction: 100,
+  summary: 200,
+  qa: 300,
+  generation: 1000
+};
+
+async function chatWithLimit(message: string, taskType: keyof typeof taskLimits) {
+  const maxTokens = taskLimits[taskType];
+  
+  const response = await cencori.ai.chat({
+    messages: [{ role: 'user', content: message }],
+    model: 'gpt-4o',
+    maxTokens // Limit output length
+  });
+
+  console.log(
+    `Used ${response.usage.completionTokens}/${maxTokens} tokens ` +
+    `($${(response.cost.cencoriChargeUsd).toFixed(4)})`
+  );
+
+  return response;
+}
+```
+
+## Strategy 5: Request Batching
+
+Batch multiple requests to reduce overhead:
+
+```typescript
+class RequestBatcher {
+  private batch: Array<{
+    messages: any[];
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+  }> = [];
+  private batchSize = 10;
+  private batchTimeout = 1000; // 1 second
+  private timer: NodeJS.Timeout | null = null;
+
+  async add(messages: any[]): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.batch.push({ messages, resolve, reject });
+
+      if (this.batch.length >= this.batchSize) {
+        this.flush();
+      } else if (!this.timer) {
+        this.timer = setTimeout(() => this.flush(), this.batchTimeout);
+      }
+    });
+  }
+
+  private async flush() {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    const currentBatch = this.batch.splice(0);
+    if (currentBatch.length === 0) return;
+
+    console.log(`Processing batch of ${currentBatch.length} requests`);
+
+    // Process all requests in parallel
+    await Promise.all(
+      currentBatch.map(async ({ messages, resolve, reject }) => {
+        try {
+          const response = await cencori.ai.chat({
+            messages,
+            model: 'gpt-4o'
+          });
+          resolve(response);
+        } catch (error) {
+          reject(error);
+        }
+      })
+    );
+  }
+}
+
+const batcher = new RequestBatcher();
+
+// Queue multiple requests
+const results = await Promise.all([
+  batcher.add([{ role: 'user', content: 'Question 1' }]),
+  batcher.add([{ role: 'user', content: 'Question 2' }]),
+  batcher.add([{ role: 'user', content: 'Question 3' }])
+]);
+```
+
+## Strategy 6: Usage Monitoring
+
+Track costs in real-time:
+
+```typescript
+class CostTracker {
+  private costs: Array<{
+    timestamp: Date;
+    model: string;
+    cost: number;
+    tokens: number;
+  }> = [];
+
+  track(response: any) {
+    this.costs.push({
+      timestamp: new Date(),
+      model: response.model,
+      cost: response.cost.cencoriChargeUsd,
+      tokens: response.usage.totalTokens
+    });
+  }
+
+  getStats(period: 'day' | 'week' | 'month' = 'day') {
+    const now = Date.now();
+    const periodMs = {
+      day: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000
+    }[period];
+
+    const periodCosts = this.costs.filter(
+      c => now - c.timestamp.getTime() < periodMs
+    );
+
+    const totalCost = periodCosts.reduce((sum, c) => sum + c.cost, 0);
+    const totalTokens = periodCosts.reduce((sum, c) => sum + c.tokens, 0);
+    const avgCostPerRequest = totalCost / periodCosts.length;
+
+    return {
+      period,
+      requests: periodCosts.length,
+      totalCost: totalCost.toFixed(4),
+      totalTokens,
+      avgCostPerRequest: avgCostPerRequest.toFixed(4),
+      costBreakdown: this.getCostBreakdown(periodCosts)
+    };
+  }
+
+  private getCostBreakdown(costs: any[]) {
+    const breakdown: Record<string, { cost: number; count: number }> = {};
+
+    for (const c of costs) {
+      if (!breakdown[c.model]) {
+        breakdown[c.model] = { cost: 0, count: 0 };
+      }
+      breakdown[c.model].cost += c.cost;
+      breakdown[c.model].count++;
+    }
+
+    return breakdown;
+  }
+
+  exportCSV(): string {
+    const header = 'Timestamp,Model,Cost,Tokens\n';
+    const rows = this.costs
+      .map(c => 
+        `${c.timestamp.toISOString()},${c.model},${c.cost},${c.tokens}`
+      )
+      .join('\n');
+    return header + rows;
+  }
+}
+
+// Usage
+const tracker = new CostTracker();
+
+const response = await cencori.ai.chat({
+  messages: [{ role: 'user', content: 'Hello' }],
+  model: 'gpt-4o'
+});
+
+tracker.track(response);
+
+// Get daily stats
+const stats = tracker.getStats('day');
+console.log('Daily stats:', stats);
+
+// Export to CSV
+const csv = tracker.exportCSV();
+console.log(csv);
+```
+
+## Strategy 7: Spend Caps
+
+Set hard limits on spending:
+
+```typescript
+class SpendCapManager {
+  private monthlySpend = 0;
+  private monthlyCap: number;
+
+  constructor(monthlyCap: number) {
+    this.monthlyCap = monthlyCap;
+  }
+
+  async chat(messages: any[], model: string): Promise<any> {
+    // Check if we're at the cap
+    if (this.monthlySpend >= this.monthlyCap) {
+      throw new Error(
+        `Monthly spend cap of $${this.monthlyCap} reached. ` +
+        `Current spend: $${this.monthlySpend.toFixed(2)}`
+      );
+    }
+
+    const response = await cencori.ai.chat({ messages, model });
+
+    // Track spend
+    this.monthlySpend += response.cost.cencoriChargeUsd;
+
+    // Warn at 80%
+    const percentage = (this.monthlySpend / this.monthlyCap) * 100;
+    if (percentage >= 80) {
+      console.warn(
+        `⚠️ Warning: ${percentage.toFixed(0)}% of monthly cap used ` +
+        `($${this.monthlySpend.toFixed(2)}/$${this.monthlyCap})`
+      );
+    }
+
+    return response;
+  }
+
+  reset() {
+    this.monthlySpend = 0;
+  }
+}
+
+// Usage: Set $100 monthly cap
+const manager = new SpendCapManager(100);
+
+try {
+  await manager.chat(
+    [{ role: 'user', content: 'Hello' }],
+    'gpt-4o'
+  );
+} catch (error) {
+  console.error('Spend cap reached:', error.message);
+}
+```
+
+## Cost Optimization Checklist
+
+<Steps>
+
+1. **Choose the Right Model**
+   - Use `gemini-2.0-flash` for simple tasks
+   - Use `gpt-4o` only for complex reasoning
+
+2. **Implement Caching**
+   - Cache responses for repeated queries
+   - Set appropriate TTL values
+
+3. **Optimize Prompts**
+   - Remove unnecessary words
+   - Use concise system prompts
+
+4. **Set Token Limits**
+   - Use `maxTokens` to cap output length
+   - Match limits to task requirements
+
+5. **Batch Requests**
+   - Process multiple requests together
+   - Reduce API overhead
+
+6. **Monitor Usage**
+   - Track costs per model
+   - Set up alerts at thresholds
+
+7. **Set Spend Caps**
+   - Implement hard limits
+   - Prevent unexpected bills
+
+</Steps>
+
+## Cost Savings Examples
+
+### Example 1: Model Switching
+
+```typescript
+// Before: Using GPT-4o for everything
+// 1M requests × 1000 tokens × $0.005 = $5,000/month
+
+// After: Using appropriate models
+const costs = {
+  simple: 500_000 * 0.00025, // Gemini Flash
+  moderate: 400_000 * 0.001,  // GPT-3.5
+  complex: 100_000 * 0.005    // GPT-4o
+};
+const total = Object.values(costs).reduce((a, b) => a + b, 0);
+
+console.log(`Savings: $${(5000 - total).toFixed(2)}/month`);
+// Output: Savings: $4,025/month (80% reduction)
+```
+
+### Example 2: Caching
+
+```typescript
+// Before: No caching
+// 1M requests × $0.001 = $1,000/month
+
+// After: 50% cache hit rate
+const withCache = 500_000 * 0.001; // Only 500K API calls
+
+console.log(`Savings: $${(1000 - withCache).toFixed(2)}/month`);
+// Output: Savings: $500/month (50% reduction)
+```
+
+## Next Steps
+
+- [Rate Limiting](/guides/rate-limiting) - Optimize throughput
+- [Multi-Provider](/guides/multi-provider) - Compare provider costs
+- [Error Handling](/guides/error-handling) - Prevent wasted requests

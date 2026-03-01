@@ -1,0 +1,391 @@
+---
+title: 'Chat Completions'
+description: 'POST /api/ai/chat - Generate chat completions with streaming support'
+---
+
+## Endpoint
+
+```
+POST https://api.cencori.com/api/ai/chat
+```
+
+Generate chat completions using various AI models from OpenAI, Anthropic, Google, and more. Supports streaming, tool calling, and automatic failover.
+
+## Authentication
+
+Requires API key in `Authorization` header or `CENCORI_API_KEY` header.
+
+## Request Body
+
+<ParamField body="messages" type="array" required>
+  Array of message objects forming the conversation.
+  
+  <Expandable title="Message Object">
+    <ParamField body="role" type="string" required>
+      Message role: `system`, `user`, or `assistant`
+    </ParamField>
+    <ParamField body="content" type="string" required>
+      Message content
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="model" type="string">
+  Model to use. If not provided, uses project default model.
+  
+  Examples:
+  - `gemini-2.0-flash` (default)
+  - `gpt-4o`
+  - `claude-3.5-sonnet`
+  - `gpt-4-turbo`
+  - `gemini-pro`
+</ParamField>
+
+<ParamField body="temperature" type="number">
+  Sampling temperature between 0 and 2. Higher values make output more random.
+  
+  Default: `0.7`
+</ParamField>
+
+<ParamField body="maxTokens" type="number">
+  Maximum tokens to generate. Alias: `max_tokens`
+</ParamField>
+
+<ParamField body="stream" type="boolean">
+  Enable streaming responses via Server-Sent Events (SSE).
+  
+  Default: `false`
+</ParamField>
+
+<ParamField body="userId" type="string">
+  End-user identifier for tracking and security monitoring.
+</ParamField>
+
+<ParamField body="tools" type="array">
+  Array of tool definitions for function calling.
+</ParamField>
+
+<ParamField body="toolChoice" type="string | object">
+  Controls tool selection: `auto`, `none`, or specific tool.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="object">
+  Generated assistant message
+  
+  <Expandable title="Message">
+    <ResponseField name="role" type="string">
+      Always `assistant`
+    </ResponseField>
+    <ResponseField name="content" type="string">
+      Generated response text
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model used for generation (may differ from requested if fallback occurred)
+</ResponseField>
+
+<ResponseField name="provider" type="string">
+  Provider used: `openai`, `anthropic`, `google`, etc.
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Token usage statistics
+  
+  <Expandable title="Usage">
+    <ResponseField name="prompt_tokens" type="number">
+      Tokens in the prompt
+    </ResponseField>
+    <ResponseField name="completion_tokens" type="number">
+      Tokens in the completion
+    </ResponseField>
+    <ResponseField name="total_tokens" type="number">
+      Total tokens used
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="cost" type="object">
+  Cost breakdown
+  
+  <Expandable title="Cost">
+    <ResponseField name="provider_cost" type="number">
+      Cost charged by provider (USD)
+    </ResponseField>
+    <ResponseField name="cencori_charge" type="number">
+      Total charge including markup (USD)
+    </ResponseField>
+    <ResponseField name="markup_percentage" type="number">
+      Markup percentage applied
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="fallback_used" type="boolean">
+  Whether fallback provider was used
+</ResponseField>
+
+<ResponseField name="latency_ms" type="number">
+  Request latency in milliseconds
+</ResponseField>
+
+## Examples
+
+### Basic Chat Request
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
+  }'
+```
+
+```json
+{
+  "message": {
+    "role": "assistant",
+    "content": "The capital of France is Paris."
+  },
+  "model": "gemini-2.0-flash",
+  "provider": "google",
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 8,
+    "total_tokens": 20
+  },
+  "cost": {
+    "provider_cost": 0.000012,
+    "cencori_charge": 0.000014,
+    "markup_percentage": 20
+  },
+  "latency_ms": 432
+}
+```
+
+### With Specific Model
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Explain quantum computing"}
+    ],
+    "temperature": 0.7,
+    "maxTokens": 500
+  }'
+```
+
+### Streaming Response
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Write a haiku"}],
+    "stream": true
+  }'
+```
+
+Streaming response format (SSE):
+
+```
+data: {"delta": "The", "finish_reason": null}
+
+data: {"delta": " autumn", "finish_reason": null}
+
+data: {"delta": " leaves", "finish_reason": null}
+
+data: {"delta": "", "finish_reason": "stop"}
+
+data: [DONE]
+```
+
+### With Function Calling
+
+```javascript
+const response = await fetch('https://api.cencori.com/api/ai/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.CENCORI_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: 'gpt-4o',
+    messages: [{role: 'user', content: 'What\'s the weather in Paris?'}],
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'get_weather',
+        description: 'Get current weather for a location',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: {type: 'string', description: 'City name'},
+            unit: {type: 'string', enum: ['celsius', 'fahrenheit']}
+          },
+          required: ['location']
+        }
+      }
+    }],
+    toolChoice: 'auto'
+  })
+});
+```
+
+### Using OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+
+const completion = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [
+    {role: 'system', content: 'You are a helpful assistant.'},
+    {role: 'user', content: 'Hello!'}
+  ]
+});
+
+console.log(completion.choices[0].message.content);
+```
+
+### Streaming with SDK
+
+```typescript
+const stream = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{role: 'user', content: 'Tell me a story'}],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  process.stdout.write(content);
+}
+```
+
+## Supported Models
+
+### OpenAI
+- `gpt-4o` - Most capable GPT-4
+- `gpt-4-turbo` - Fast GPT-4
+- `gpt-4` - Original GPT-4
+- `gpt-3.5-turbo` - Fast and cost-effective
+
+### Anthropic
+- `claude-3.5-sonnet` - Latest Claude model
+- `claude-3-opus` - Most capable Claude
+- `claude-3-sonnet` - Balanced performance
+- `claude-3-haiku` - Fast and affordable
+
+### Google
+- `gemini-2.0-flash` - Fast, multimodal (default)
+- `gemini-pro` - Gemini Pro
+- `gemini-1.5-pro` - Extended context
+
+### Other Providers
+- `grok-beta` - xAI Grok
+- `deepseek-chat` - DeepSeek
+- `mixtral-8x7b` - Mistral
+- `llama-3-70b` - Meta Llama via Groq
+
+## Security Features
+
+Cencori automatically scans all chat requests for:
+
+- **Prompt Injection** - Attempts to manipulate system behavior
+- **Jailbreaks** - Attempts to bypass safety guardrails  
+- **PII Detection** - Credit cards, SSNs, emails, phone numbers
+- **Output Filtering** - Sensitive data in responses
+- **Custom Data Rules** - Project-specific patterns
+
+Requests violating security policies return `403 Forbidden`:
+
+```json
+{
+  "error": "Security violation detected",
+  "message": "I cannot provide that information as it may contain sensitive data or violates our safety policies.",
+  "reasons": ["prompt_injection"]
+}
+```
+
+## Automatic Failover
+
+When a provider fails, Cencori automatically:
+
+1. Retries with exponential backoff (up to 3 attempts)
+2. Switches to fallback provider if primary fails
+3. Returns response with `fallback_used: true`
+
+Fallback chain (configurable in project settings):
+- OpenAI → Anthropic → Google
+- Anthropic → OpenAI → Google  
+- Google → OpenAI → Anthropic
+
+Fallback response includes original provider info:
+
+```json
+{
+  "fallback_used": true,
+  "original_provider": "openai",
+  "original_model": "gpt-4o",
+  "provider": "anthropic",
+  "model": "claude-3.5-sonnet"
+}
+```
+
+## Error Responses
+
+See [Error Codes](/api/errors) for complete list.
+
+Common errors:
+
+- `401` - Missing or invalid API key
+- `400` - Invalid request parameters  
+- `403` - Security violation or access denied
+- `429` - Rate limit exceeded
+- `402` - Credits exhausted
+- `500` - Provider error
+
+## Rate Limits
+
+Rate limits apply per project:
+
+- Free: 1,000 requests/month
+- Pro: 50,000 requests/month  
+- Enterprise: Custom limits
+
+Rate limit headers:
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1234567890
+X-Request-Id: req_abc123
+```
+
+## Best Practices
+
+1. **Use streaming** for better UX in interactive apps
+2. **Set maxTokens** to control costs
+3. **Include userId** for security tracking
+4. **Handle errors gracefully** with retry logic
+5. **Monitor usage** in dashboard logs
+6. **Use system messages** for behavior control
+7. **Enable failover** for high availability

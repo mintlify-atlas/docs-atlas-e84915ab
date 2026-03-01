@@ -1,0 +1,484 @@
+---
+title: Security Scoring System
+description: Understand the A-F tier security grading system and how your score is calculated
+---
+
+# Security Scoring System
+
+Cencori Scan assigns an **A through F tier security score** based on the number and severity of detected issues.
+
+## Score Tiers
+
+<CardGroup cols={2}>
+  <Card title="A-Tier" icon="circle-check" color="#16a34a">
+    **Excellent** - No security issues detected
+  </Card>
+  
+  <Card title="B-Tier" icon="circle-check" color="#3b82f6">
+    **Good** - Minor improvements recommended
+  </Card>
+  
+  <Card title="C-Tier" icon="triangle-exclamation" color="#eab308">
+    **Fair** - Some concerns need attention
+  </Card>
+  
+  <Card title="D-Tier" icon="circle-exclamation" color="#ef4444">
+    **Poor** - Significant issues detected
+  </Card>
+  
+  <Card title="F-Tier" icon="circle-xmark" color="#dc2626">
+    **Critical** - Major vulnerabilities found
+  </Card>
+</CardGroup>
+
+## Scoring Algorithm
+
+Your score is calculated based on issue severity:
+
+```typescript
+function calculateScore(issues: ScanIssue[]): Score {
+  const critical = issues.filter(i => i.severity === 'critical').length;
+  const high = issues.filter(i => i.severity === 'high').length;
+  const medium = issues.filter(i => i.severity === 'medium').length;
+  
+  if (critical > 0) return 'F';
+  if (high >= 3) return 'F';
+  if (high >= 2) return 'D';
+  if (high >= 1 || medium >= 5) return 'C';
+  if (medium >= 2) return 'B';
+  if (issues.length === 0) return 'A';
+  return 'B';
+}
+```
+
+## Tier Breakdown
+
+### A-Tier: Excellent ✅
+
+**Criteria**:
+- Zero security issues detected
+- No secrets, PII, or vulnerabilities
+
+**What it means**:
+- Your codebase follows security best practices
+- Safe to deploy to production
+- No immediate security concerns
+
+**Example**:
+```
+Files scanned: 142
+Issues found: 0
+
+Security Score: A-Tier
+✓ Excellent! No security issues detected.
+```
+
+### B-Tier: Good 🔵
+
+**Criteria**:
+- Less than 2 medium severity issues
+- No high or critical issues
+
+**What it means**:
+- Generally secure with minor issues
+- Small improvements recommended
+- Safe for production with minor fixes
+
+**Typical issues**:
+- 1 medium severity finding (e.g., localhost URL in code)
+- Low severity warnings (e.g., example email in docs)
+
+**Example**:
+```
+Security Score: B-Tier
+Good, but minor improvements recommended.
+
+MEDIUM (1)
+└─ src/config.ts:5  http://localhost:3000
+   Development URL - use environment variables
+```
+
+### C-Tier: Fair ⚠️
+
+**Criteria**:
+- 1 high severity issue, OR
+- 5 or more medium severity issues
+
+**What it means**:
+- Some security concerns that need attention
+- Should be fixed before production deployment
+- Review flagged issues carefully
+
+**Typical issues**:
+- Insecure CORS configuration
+- Multiple hardcoded configuration values
+- XSS vulnerability without sanitization
+
+**Example**:
+```
+Security Score: C-Tier
+Fair. Some security concerns need attention.
+
+HIGH (1)
+└─ src/api.ts:23  Access-Control-Allow-Origin: *
+   Allows requests from any origin
+
+MEDIUM (3)
+├─ src/config.ts:5  http://localhost:3000
+├─ src/utils.ts:12  DEBUG = true
+└─ src/db.ts:45  Hardcoded database URL
+```
+
+### D-Tier: Poor 🔴
+
+**Criteria**:
+- 2 or more high severity issues
+
+**What it means**:
+- Significant security problems detected
+- Should NOT be deployed to production
+- Requires immediate attention
+
+**Typical issues**:
+- Multiple hardcoded passwords
+- SQL injection vulnerabilities
+- Exposed PII
+- Multiple XSS risks
+
+**Example**:
+```
+Security Score: D-Tier
+Poor. Significant security issues detected.
+
+HIGH (2)
+├─ src/auth.ts:15  password = "admin123"
+│  Hardcoded password
+└─ src/api.ts:45  element.innerHTML = userInput
+   XSS vulnerability
+
+MEDIUM (4)
+├─ src/config.ts:8  admin@company.com
+├─ src/config.ts:12  555-123-4567
+├─ src/db.ts:23  Hardcoded connection string
+└─ src/utils.ts:5  DEBUG = true
+```
+
+### F-Tier: Critical ❌
+
+**Criteria**:
+- Any critical severity issue, OR
+- 3 or more high severity issues
+
+**What it means**:
+- **CRITICAL**: Do NOT deploy to production
+- Major security vulnerabilities that can be exploited
+- Immediate action required
+
+**Typical issues**:
+- Hardcoded API keys (OpenAI, Stripe, AWS)
+- SQL injection vulnerabilities
+- Private keys in code
+- Database credentials exposed
+- JWT secrets hardcoded
+
+**Example**:
+```
+Security Score: F-Tier
+Critical! Major security vulnerabilities found.
+
+CRITICAL (2)
+├─ src/api.ts:12  sk-proj-****
+│  Hardcoded OpenAI API key
+└─ src/db.ts:45  `SELECT * FROM users WHERE id = ${userId}`
+   SQL injection vulnerability
+
+HIGH (1)
+└─ src/stripe.ts:8  sk_live_****
+   Stripe production key exposed
+```
+
+## Issue Severity
+
+Each detected issue has a severity level:
+
+### Critical 🔴
+
+**Impact**: Immediate security risk
+
+**Examples**:
+- Production API keys (OpenAI, Anthropic, Stripe live keys)
+- Private keys (RSA, SSH)
+- Database credentials
+- SQL injection with user input
+- JWT secrets
+- OAuth client secrets
+
+**Action**: Fix immediately, rotate compromised credentials
+
+### High 🟠
+
+**Impact**: Serious vulnerability
+
+**Examples**:
+- Test API keys (Stripe test keys)
+- Hardcoded passwords
+- XSS vulnerabilities
+- CORS misconfigurations
+- Social Security Numbers
+- Credit card numbers
+
+**Action**: Fix before next release
+
+### Medium 🟡
+
+**Impact**: Should be addressed
+
+**Examples**:
+- Email addresses in code
+- Phone numbers
+- Hardcoded URLs
+- Debug flags enabled
+- Firebase URLs
+
+**Action**: Fix in regular maintenance
+
+### Low 🔵
+
+**Impact**: Minor concern
+
+**Examples**:
+- IP addresses (non-public)
+- Exposed API route files (informational)
+
+**Action**: Review and fix when convenient
+
+## Score Impact Examples
+
+### Single Issue Impact
+
+<Tabs>
+  <Tab title="1 Critical">
+    ```
+    1 critical issue = F-Tier
+    
+    Example: One hardcoded OpenAI API key
+    ```
+  </Tab>
+  
+  <Tab title="3 High">
+    ```
+    3 high issues = F-Tier
+    
+    Example: Three hardcoded passwords
+    ```
+  </Tab>
+  
+  <Tab title="2 High">
+    ```
+    2 high issues = D-Tier
+    
+    Example: Two XSS vulnerabilities
+    ```
+  </Tab>
+  
+  <Tab title="1 High">
+    ```
+    1 high issue = C-Tier
+    
+    Example: One CORS misconfiguration
+    ```
+  </Tab>
+  
+  <Tab title="2 Medium">
+    ```
+    2 medium issues = B-Tier
+    
+    Example: Two hardcoded URLs
+    ```
+  </Tab>
+</Tabs>
+
+### Combined Issues
+
+<CodeGroup>
+
+```text F-Tier Example
+Critical: 1  → F-Tier (any critical = F)
+High: 0
+Medium: 3
+Low: 2
+
+Result: F-Tier
+```
+
+```text D-Tier Example
+Critical: 0
+High: 2      → D-Tier (2+ high)
+Medium: 1
+Low: 0
+
+Result: D-Tier
+```
+
+```text C-Tier Example
+Critical: 0
+High: 1      → C-Tier (1 high)
+Medium: 2
+Low: 3
+
+Result: C-Tier
+```
+
+```text B-Tier Example
+Critical: 0
+High: 0
+Medium: 1    → B-Tier (< 2 medium)
+Low: 5
+
+Result: B-Tier
+```
+
+</CodeGroup>
+
+## Improving Your Score
+
+### From F to A
+
+<Steps>
+  <Step title="Fix all critical issues">
+    - Move API keys to environment variables
+    - Remove database credentials from code
+    - Fix SQL injection vulnerabilities
+  </Step>
+  
+  <Step title="Fix all high severity issues">
+    - Remove hardcoded passwords
+    - Sanitize XSS vulnerabilities
+    - Configure CORS properly
+  </Step>
+  
+  <Step title="Address medium issues">
+    - Move configuration to env vars
+    - Remove PII from code
+    - Use environment-based debug flags
+  </Step>
+  
+  <Step title="Clean up low priority items">
+    - Remove unnecessary IP addresses
+    - Document exposed routes
+  </Step>
+</Steps>
+
+### Quick Wins
+
+<Tip>
+  **Fastest path to A-Tier:**
+  
+  1. Run: `npx @cencori/scan`
+  2. Enable AI auto-fix: `y`
+  3. Apply all suggested fixes: `All`
+  4. Rescan to verify: `npx @cencori/scan`
+</Tip>
+
+## CI/CD Integration
+
+### Fail Build on Low Scores
+
+<CodeGroup>
+
+```bash Fail on F only
+SCORE=$(jq -r '.score' scan-results.json)
+if [[ "$SCORE" == "F" ]]; then
+  exit 1
+fi
+```
+
+```bash Fail on D or F
+SCORE=$(jq -r '.score' scan-results.json)
+if [[ "$SCORE" == "F" || "$SCORE" == "D" ]]; then
+  exit 1
+fi
+```
+
+```bash Require B or better
+SCORE=$(jq -r '.score' scan-results.json)
+if [[ "$SCORE" != "A" && "$SCORE" != "B" ]]; then
+  exit 1
+fi
+```
+
+</CodeGroup>
+
+## Score Trends
+
+Track your security score over time:
+
+```bash
+# Save historical scores
+echo "$(date),$(jq -r '.score' scan-results.json)" >> security-scores.csv
+```
+
+## Best Practices
+
+<Tip>
+  **Maintain A-Tier or B-Tier** for production deployments
+</Tip>
+
+<Tip>
+  **Run scans before every commit** using pre-commit hooks
+</Tip>
+
+<Tip>
+  **Track your score** in CI/CD to prevent regressions
+</Tip>
+
+<Warning>
+  Never deploy F-Tier code to production
+</Warning>
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Why did my score drop from A to F?">
+    Most commonly caused by:
+    - Accidentally committing an API key
+    - Adding database credentials to code
+    - Introducing SQL injection vulnerability
+    
+    Run the scan to see what was detected and fix immediately.
+  </Accordion>
+  
+  <Accordion title="Can I customize scoring thresholds?">
+    Currently, scoring thresholds are fixed. However, you can:
+    - Filter issues by severity in programmatic usage
+    - Set custom CI/CD failure conditions
+    - Focus on fixing specific issue types
+  </Accordion>
+  
+  <Accordion title="Why is my test file causing a low score?">
+    Test files are automatically scanned but PII detection is disabled.
+    If test files contain real API keys, they will be flagged.
+    
+    Solution: Use test API keys (e.g., Stripe test keys) or mock values.
+  </Accordion>
+  
+  <Accordion title="How long does it take to reach A-Tier?">
+    Depends on the number and severity of issues:
+    - Small projects: 5-30 minutes
+    - Large projects: 1-2 hours
+    
+    Using AI auto-fix can reduce this to minutes.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Auto-Fix" icon="wand-magic-sparkles" href="/scan/ai-autofix">
+    Automatically improve your score
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="code-branch" href="/scan/ci-cd-integration">
+    Enforce minimum scores in your pipeline
+  </Card>
+</CardGroup>

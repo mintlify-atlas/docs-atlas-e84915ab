@@ -1,0 +1,229 @@
+---
+title: Credits System
+description: How Cencori's prepaid credits system works for AI usage billing
+---
+
+Cencori uses a **prepaid credits system** to manage billing for AI requests. Credits are deducted from your organization's balance for each request based on token usage and provider pricing.
+
+## Credits Balance
+
+Each organization has a credit balance that:
+
+- Is shared across all projects in the organization
+- Updates in real-time with each request
+- Never goes negative (requests blocked if insufficient credits)
+- Can be topped up at any time
+
+### Checking Your Balance
+
+View your current balance in:
+- Dashboard header (always visible)
+- Organization settings page
+- Via API using `getCreditsBalance()`
+
+<Info>
+  Credits are denominated in USD. 1 credit = $1.00
+</Info>
+
+## Credit Transactions
+
+All credit activity is logged in the `credit_transactions` table with full audit history.
+
+### Transaction Types
+
+#### Topup
+Credits added to your account via purchase:
+
+```typescript
+await addCredits(
+  organizationId,
+  100.00,        // $100 in credits
+  'topup',
+  'Credit card purchase',
+  { payment_method: 'stripe' }
+);
+```
+
+#### Usage
+Credits deducted for AI requests:
+
+```typescript
+await deductCredits(
+  organizationId,
+  0.00375,       // Cost of request
+  'GPT-4o chat completion',
+  requestId      // Reference to ai_requests table
+);
+```
+
+#### Refund
+Credits returned for failed/cancelled requests:
+
+```typescript
+await adjustCredits(
+  organizationId,
+  0.00375,       // Positive amount to credit back
+  'refund',
+  'Provider error - request failed',
+  { original_request_id: requestId }
+);
+```
+
+#### Adjustment
+Manual credit adjustments (admin only):
+
+```typescript
+await adjustCredits(
+  organizationId,
+  -10.00,        // Negative to debit, positive to credit
+  'adjustment',
+  'Account correction',
+  { admin_user: 'admin@cencori.com' }
+);
+```
+
+## How Credits Are Deducted
+
+For each AI request, Cencori:
+
+1. **Estimates Cost** - Checks if balance is sufficient
+2. **Processes Request** - Sends to provider
+3. **Calculates Actual Cost** - Based on token usage
+4. **Deducts Credits** - Updates balance atomically
+5. **Logs Transaction** - Records full audit trail
+
+### Cost Calculation
+
+Credits deducted = Provider cost + Cencori markup
+
+```typescript
+// Example from source code (lib/providers/pricing.ts)
+const baseCost = 
+  (inputTokens / 1000) * pricing.inputPer1KTokens +
+  (outputTokens / 1000) * pricing.outputPer1KTokens;
+
+const markup = baseCost * (pricing.cencoriMarkupPercentage / 100);
+const totalCost = baseCost + markup;
+```
+
+<Tip>
+  All costs are calculated to the nearest $0.000001 (one-millionth of a dollar) for accuracy.
+</Tip>
+
+## Insufficient Credits Handling
+
+If your balance is too low for a request:
+
+1. **Request Blocked** - Returns 402 Payment Required
+2. **Balance Preserved** - No partial deduction
+3. **Alert Sent** - Email notification (if enabled)
+4. **Dashboard Warning** - Red banner with topup link
+
+```typescript
+// Source: lib/credits.ts
+export async function hasInsufficientCredits(
+  organizationId: string,
+  estimatedCost: number
+): Promise<boolean> {
+  const balance = await getCreditsBalance(organizationId);
+  return balance < estimatedCost;
+}
+```
+
+## Transaction History
+
+Every credit transaction includes:
+
+- **ID** - Unique transaction identifier
+- **Amount** - Credits added/deducted (positive/negative)
+- **Type** - topup, usage, refund, adjustment
+- **Description** - Human-readable explanation
+- **Reference ID** - Link to related request (for usage)
+- **Balance Before** - Account balance before transaction
+- **Balance After** - Account balance after transaction
+- **Metadata** - Additional context (JSON)
+- **Timestamp** - When transaction occurred
+
+### Viewing Transaction History
+
+In the dashboard:
+- Organization Settings → Billing → Transaction History
+- Shows last 50 transactions by default
+- Filter by type, date range, or amount
+- Export to CSV for accounting
+
+Via API:
+
+```typescript
+const transactions = await getCreditTransactions(
+  organizationId,
+  100  // Last 100 transactions
+);
+```
+
+## Atomic Balance Updates
+
+Credit operations are **atomic** to prevent race conditions:
+
+1. Read current balance
+2. Calculate new balance
+3. Verify balance won't go negative
+4. Update balance and log transaction in single operation
+
+```typescript
+// Source: lib/credits.ts:113-167
+async function applyCreditDelta(
+  organizationId: string,
+  delta: number,
+  transactionType: 'topup' | 'usage' | 'refund' | 'adjustment',
+  description: string,
+  referenceId?: string,
+  metadata?: Record<string, unknown>
+): Promise<boolean> {
+  const currentBalance = await getCreditsBalance(organizationId);
+  const newBalance = currentBalance + delta;
+
+  if (newBalance < 0) {
+    return false;  // Reject if would go negative
+  }
+
+  // Update balance and log transaction atomically
+  // ...
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set Low Balance Alerts">
+    Configure alerts at 20% and 10% of your typical monthly spend to avoid service interruption.
+  </Accordion>
+  
+  <Accordion title="Monitor High-Volume Projects">
+    Use project-level budgets to track spending by application or team.
+  </Accordion>
+  
+  <Accordion title="Review Transaction History">
+    Check monthly transaction exports to identify cost optimization opportunities.
+  </Accordion>
+  
+  <Accordion title="Test with Free Tier">
+    Use Google Gemini (0% markup) for development and testing before switching to paid providers.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Credits never expire. Load a larger amount to get volume discounts (coming soon).
+</Tip>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Pricing Overview" icon="dollar-sign" href="/pricing/overview">
+    Understand Cencori's pricing model
+  </Card>
+  
+  <Card title="Cost Tracking" icon="chart-line" href="/pricing/cost-tracking">
+    Set up budgets and spending alerts
+  </Card>
+</CardGroup>

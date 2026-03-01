@@ -1,0 +1,359 @@
+---
+title: Changelog Generation
+description: Generate AI-powered changelogs from your git commit history automatically
+---
+
+# Changelog Generation
+
+Cencori Scan includes a powerful changelog generator that reads your git history and creates human-readable changelogs.
+
+## Quick Start
+
+```bash
+npx @cencori/scan changelog
+```
+
+Generates a changelog from the last week of git commits.
+
+## Usage
+
+### Basic Changelog
+
+Generate a weekly changelog:
+
+```bash
+npx @cencori/scan changelog
+```
+
+Output:
+
+```markdown
+## Changelog (Jan 23, 2026 - Jan 30, 2026)
+
+### Features
+
+- Added AI-powered changelog generation
+- New security scanning patterns for AWS secrets
+
+### Bug Fixes
+
+- Fixed telemetry not sending before process exit
+
+### Documentation
+
+- Updated README with new examples
+```
+
+### Custom Time Range
+
+Specify a custom time range with `--since`:
+
+<CodeGroup>
+
+```bash 2 Weeks
+npx @cencori/scan changelog --since="2 weeks ago"
+```
+
+```bash 1 Month
+npx @cencori/scan changelog --since="1 month ago"
+```
+
+```bash 30 Days
+npx @cencori/scan changelog --since="30 days ago"
+```
+
+</CodeGroup>
+
+### Save to File
+
+Output to a file instead of stdout:
+
+```bash
+npx @cencori/scan changelog --output=CHANGELOG.md
+```
+
+Output:
+
+```
+✔ Found 23 commits
+✔ Changelog saved to CHANGELOG.md
+```
+
+### JSON Format
+
+Get structured data for processing:
+
+```bash
+npx @cencori/scan changelog --format=json
+```
+
+Output:
+
+```json
+{
+  "period": {
+    "start": "2026-01-23T00:00:00.000Z",
+    "end": "2026-01-30T00:00:00.000Z"
+  },
+  "commitCount": 23,
+  "entries": [
+    {
+      "type": "feature",
+      "title": "Features",
+      "commits": [
+        "Added AI-powered changelog generation",
+        "New security scanning patterns for AWS secrets"
+      ]
+    },
+    {
+      "type": "fix",
+      "title": "Bug Fixes",
+      "commits": [
+        "Fixed telemetry not sending before process exit"
+      ]
+    }
+  ],
+  "markdown": "## Changelog (Jan 23, 2026 - Jan 30, 2026)\n\n..."
+}
+```
+
+## Command Options
+
+<ResponseField name="--since" type="string" default="1 week ago">
+  Time range for commits. Accepts natural language:
+  - "1 week ago"
+  - "2 weeks ago"
+  - "1 month ago"
+  - "30 days ago"
+</ResponseField>
+
+<ResponseField name="--output" type="string">
+  File path to save the changelog. If omitted, outputs to stdout.
+</ResponseField>
+
+<ResponseField name="--format" type="markdown | json" default="markdown">
+  Output format:
+  - `markdown` - Human-readable changelog
+  - `json` - Structured data for processing
+</ResponseField>
+
+## Free vs Pro Tier
+
+### Free Tier (No API Key)
+
+Basic changelog generation with conventional commit parsing:
+
+- Groups commits by type (features, fixes, docs, etc.)
+- Cleans up conventional commit prefixes
+- Fast local processing
+
+```markdown
+### Features
+
+- Added new API endpoint
+- Improved error handling
+
+### Bug Fixes
+
+- Fixed login redirect
+```
+
+### Pro Tier (With API Key)
+
+AI-enhanced changelogs with human-readable summaries:
+
+- **Converts** developer commit messages to user-facing language
+- **Groups** related changes intelligently
+- **Highlights** breaking changes automatically
+- **Summarizes** complex changes
+
+```markdown
+### New Features
+
+**Authentication System**: Users can now sign in with Google and GitHub accounts, providing a faster and more secure login experience.
+
+**API Rate Limiting**: Added intelligent rate limiting to prevent abuse while maintaining great performance for legitimate users.
+
+### Improvements
+
+**Error Messages**: Error messages are now more helpful with actionable suggestions for resolution.
+
+### Breaking Changes
+
+⚠️ **API v1 Deprecated**: The v1 API endpoints have been removed. Please migrate to v2 (see migration guide).
+```
+
+<Card title="Get API Key" icon="key" href="https://cencori.com/dashboard">
+  Upgrade to Pro tier at cencori.com/dashboard
+</Card>
+
+## Commit Categorization
+
+The changelog generator automatically categorizes commits using conventional commit prefixes:
+
+<ResponseField name="feat / feature" type="Features">
+  New features and functionality
+</ResponseField>
+
+<ResponseField name="fix / bugfix" type="Bug Fixes">
+  Bug fixes and patches
+</ResponseField>
+
+<ResponseField name="docs" type="Documentation">
+  Documentation changes
+</ResponseField>
+
+<ResponseField name="chore" type="Other Changes">
+  Maintenance, dependencies, tooling
+</ResponseField>
+
+<ResponseField name="refactor" type="Other Changes">
+  Code refactoring without feature changes
+</ResponseField>
+
+<ResponseField name="test" type="Other Changes">
+  Test additions or updates
+</ResponseField>
+
+<ResponseField name="style" type="Other Changes">
+  Code style changes (formatting, etc.)
+</ResponseField>
+
+## Examples
+
+### Weekly Release Notes
+
+```bash
+npx @cencori/scan changelog \
+  --since="1 week ago" \
+  --output=RELEASE-NOTES.md
+```
+
+### Monthly Changelog
+
+```bash
+npx @cencori/scan changelog \
+  --since="1 month ago" \
+  --output=CHANGELOG.md
+```
+
+### CI/CD Integration
+
+Generate changelog on release:
+
+```yaml .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history
+      
+      - name: Generate Changelog
+        run: |
+          npx @cencori/scan changelog \
+            --since="$(git describe --tags --abbrev=0 HEAD^)" \
+            --output=CHANGELOG.md
+        env:
+          CENCORI_API_KEY: ${{ secrets.CENCORI_API_KEY }}
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: CHANGELOG.md
+```
+
+### Package.json Script
+
+Add to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "changelog": "cencori-scan changelog --output=CHANGELOG.md",
+    "changelog:month": "cencori-scan changelog --since='1 month ago' --output=CHANGELOG.md"
+  }
+}
+```
+
+## Requirements
+
+<Warning>
+  Changelog generation requires git to be installed and the command to be run in a git repository.
+</Warning>
+
+<ResponseField name="Git" type="required">
+  Must be installed and in PATH
+</ResponseField>
+
+<ResponseField name="Git Repository" type="required">
+  Must run inside a git repository with commit history
+</ResponseField>
+
+<ResponseField name="Commits" type="required">
+  At least one commit in the specified time range
+</ResponseField>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No commits found">
+    If you see "No commits found in the specified period":
+    
+    1. Check you're in a git repository: `git status`
+    2. Verify commits exist: `git log --since="1 week ago"`
+    3. Try a larger time range: `--since="1 month ago"`
+  </Accordion>
+  
+  <Accordion title="Git not found">
+    Install git:
+    
+    - **macOS**: `brew install git`
+    - **Ubuntu/Debian**: `sudo apt install git`
+    - **Windows**: Download from [git-scm.com](https://git-scm.com)
+  </Accordion>
+  
+  <Accordion title="Shallow clone (CI)">
+    In CI environments, fetch full history:
+    
+    ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Tip>
+  Use conventional commit messages (feat:, fix:, docs:) for better categorization.
+</Tip>
+
+<Tip>
+  Generate changelogs before each release to document changes.
+</Tip>
+
+<Tip>
+  Commit your CHANGELOG.md file to version control to maintain history.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="GitHub Integration" icon="github" href="/scan/github-integration">
+    Automate scanning and changelogs with GitHub Actions
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="code-branch" href="/scan/ci-cd-integration">
+    Add to your deployment pipeline
+  </Card>
+</CardGroup>

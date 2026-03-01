@@ -1,0 +1,644 @@
+---
+title: Memory & RAG
+description: Vector storage for RAG, conversation history, and semantic search
+---
+
+# Memory & RAG
+
+The Memory API provides vector storage for building RAG (Retrieval-Augmented Generation) applications, storing conversation history, and implementing semantic search.
+
+## Overview
+
+Cencori Memory is a managed vector database that:
+
+- **Automatic embeddings**: Content is embedded automatically
+- **Semantic search**: Find relevant content by meaning, not keywords
+- **Namespaces**: Organize memories by project, user, or purpose
+- **RAG integration**: Built-in chat with automatic context retrieval
+- **TTL support**: Automatic expiration for temporary data
+
+## Quick Start
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+// Store a memory
+await cencori.memory.store({
+  namespace: 'product-docs',
+  content: 'Cencori provides AI Gateway, Compute, Workflow, and Storage.',
+  metadata: { source: 'overview.md', section: 'features' }
+});
+
+// Search memories
+const results = await cencori.memory.search({
+  namespace: 'product-docs',
+  query: 'What does Cencori provide?',
+  limit: 5
+});
+
+console.log(results.results[0].content);
+```
+
+See `packages/sdk/src/memory/index.ts:67` for the `MemoryClient` implementation.
+
+## Namespaces
+
+### Create Namespace
+
+Organize memories into logical groups:
+
+```typescript
+const namespace = await cencori.memory.createNamespace({
+  name: 'customer-docs',
+  description: 'Customer-facing documentation',
+  embeddingModel: 'text-embedding-3-small', // optional
+  metadata: {
+    version: '1.0',
+    language: 'en'
+  }
+});
+
+console.log('Namespace ID:', namespace.id);
+console.log('Embedding dimensions:', namespace.dimensions);
+```
+
+See `packages/sdk/src/memory/index.ts:111` for the `createNamespace()` method.
+
+### List Namespaces
+
+```typescript
+const namespaces = await cencori.memory.listNamespaces();
+
+for (const ns of namespaces) {
+  console.log(`${ns.name}: ${ns.memoryCount} memories`);
+}
+```
+
+See `packages/sdk/src/memory/index.ts:121` for the `listNamespaces()` method.
+
+## Storing Memories
+
+### Basic Storage
+
+```typescript
+const memory = await cencori.memory.store({
+  namespace: 'conversations',
+  content: 'User asked about pricing plans for enterprise customers',
+  metadata: {
+    userId: 'user_123',
+    timestamp: new Date().toISOString(),
+    intent: 'pricing_inquiry'
+  }
+});
+
+console.log('Stored memory ID:', memory.id);
+```
+
+See `packages/sdk/src/memory/index.ts:144` for the `store()` method.
+
+### With Expiration
+
+Automatically delete memories after a time:
+
+```typescript
+await cencori.memory.store({
+  namespace: 'chat-sessions',
+  content: 'Temporary conversation context',
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+  metadata: { sessionId: 'session_abc' }
+});
+```
+
+### Custom Embeddings
+
+Provide your own embeddings:
+
+```typescript
+// Generate embedding elsewhere
+const embeddingResponse = await cencori.ai.embeddings({
+  model: 'text-embedding-3-large',
+  input: 'Custom content'
+});
+
+await cencori.memory.store({
+  namespace: 'custom',
+  content: 'Custom content',
+  embedding: embeddingResponse.embeddings[0],
+  metadata: { custom: true }
+});
+```
+
+### Batch Storage
+
+Store multiple memories at once:
+
+```typescript
+const items = [
+  { content: 'First document', metadata: { page: 1 } },
+  { content: 'Second document', metadata: { page: 2 } },
+  { content: 'Third document', metadata: { page: 3 } }
+];
+
+const memories = await cencori.memory.storeBatch('documentation', items);
+console.log(`Stored ${memories.length} memories`);
+```
+
+See `packages/sdk/src/memory/index.ts:196` for the `storeBatch()` method.
+
+## Searching Memories
+
+### Semantic Search
+
+Find relevant memories by meaning:
+
+```typescript
+const results = await cencori.memory.search({
+  namespace: 'product-docs',
+  query: 'How do I authenticate API requests?',
+  limit: 5,
+  threshold: 0.7  // Only return results with similarity >= 0.7
+});
+
+for (const result of results.results) {
+  console.log(`[${result.similarity.toFixed(2)}] ${result.content}`);
+  console.log('Metadata:', result.metadata);
+}
+
+console.log(`Found ${results.count} results in ${results.latencyMs}ms`);
+```
+
+See `packages/sdk/src/memory/index.ts:170` for the `search()` method.
+
+### Metadata Filtering
+
+Filter by metadata fields:
+
+```typescript
+const results = await cencori.memory.search({
+  namespace: 'conversations',
+  query: 'pricing questions',
+  filter: {
+    userId: 'user_123',
+    intent: 'pricing_inquiry'
+  },
+  limit: 10
+});
+```
+
+### Search Result Format
+
+```typescript
+interface SearchResult {
+  results: Memory[];     // Matching memories
+  query: string;         // Original query
+  namespace: string;     // Namespace searched
+  count: number;         // Number of results
+  latencyMs: number;     // Search duration
+}
+
+interface Memory {
+  id: string;                         // Memory ID
+  namespace: string;                  // Namespace
+  content: string;                    // Stored content
+  metadata: Record<string, unknown>;  // Custom metadata
+  similarity?: number;                // Similarity score (0-1)
+  expiresAt?: string;                 // Expiration time
+  createdAt: string;                  // Creation time
+  updatedAt?: string;                 // Last update
+}
+```
+
+See `packages/sdk/src/memory/index.ts:21` for the `Memory` type.
+
+## RAG (Retrieval-Augmented Generation)
+
+### Basic RAG
+
+Chat with automatic context retrieval:
+
+```typescript
+const response = await cencori.ai.rag({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'user', content: 'What are the main features of Cencori?' }
+  ],
+  namespace: 'product-docs',
+  limit: 5,         // Retrieve top 5 relevant memories
+  threshold: 0.5    // Only use memories with similarity >= 0.5
+});
+
+console.log('Response:', response.message.content);
+console.log('Sources used:', response.sources?.length);
+
+// View retrieved sources
+response.sources?.forEach(source => {
+  console.log(`[${source.similarity.toFixed(2)}] ${source.content.slice(0, 100)}...`);
+  console.log('Metadata:', source.metadata);
+});
+```
+
+See `packages/sdk/src/ai/index.ts:441` for the `rag()` method.
+
+### RAG Streaming
+
+Stream responses with context retrieval:
+
+```typescript
+for await (const chunk of cencori.ai.ragStream({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Explain the pricing model' }],
+  namespace: 'product-docs',
+  limit: 5
+})) {
+  if (chunk.type === 'sources') {
+    // Received retrieved sources
+    console.log('\nRetrieved sources:');
+    chunk.sources?.forEach((source, i) => {
+      console.log(`${i + 1}. [${source.similarity.toFixed(2)}] ${source.content.slice(0, 80)}...`);
+    });
+    console.log();
+  } else if (chunk.type === 'content') {
+    // Streaming response
+    process.stdout.write(chunk.delta);
+  }
+}
+```
+
+See `packages/sdk/src/ai/index.ts:499` for the `ragStream()` method.
+
+### Include/Exclude Sources
+
+```typescript
+const response = await cencori.ai.rag({
+  model: 'gpt-4o',
+  messages,
+  namespace: 'docs',
+  includeSources: false  // Don't return sources in response (faster)
+});
+
+// Response only includes the AI's answer
+console.log(response.message.content);
+```
+
+## Memory Management
+
+### Get Memory by ID
+
+```typescript
+const memory = await cencori.memory.get('mem_abc123');
+
+console.log(memory.content);
+console.log(memory.metadata);
+```
+
+See `packages/sdk/src/memory/index.ts:180` for the `get()` method.
+
+### Delete Memory
+
+```typescript
+const result = await cencori.memory.delete('mem_abc123');
+console.log('Deleted:', result.deleted);
+```
+
+See `packages/sdk/src/memory/index.ts:187` for the `delete()` method.
+
+### Delete by Filter
+
+Delete all memories matching criteria:
+
+```typescript
+const result = await cencori.memory.deleteByFilter(
+  'conversations',
+  { userId: 'user_123' }
+);
+
+console.log(`Deleted ${result.deleted} memories`);
+```
+
+See `packages/sdk/src/memory/index.ts:209` for the `deleteByFilter()` method.
+
+## Common Use Cases
+
+### Conversation History
+
+Store and retrieve chat context:
+
+```typescript
+import { ChatMessage } from 'cencori';
+
+const conversationHistory: ChatMessage[] = [];
+
+async function chat(userMessage: string, userId: string) {
+  // Store user message
+  await cencori.memory.store({
+    namespace: `chat-${userId}`,
+    content: userMessage,
+    metadata: {
+      role: 'user',
+      timestamp: new Date().toISOString()
+    }
+  });
+
+  // Search relevant history
+  const context = await cencori.memory.search({
+    namespace: `chat-${userId}`,
+    query: userMessage,
+    limit: 5
+  });
+
+  // Build context from history
+  const contextMessages: ChatMessage[] = context.results.map(m => ({
+    role: m.metadata.role as 'user' | 'assistant',
+    content: m.content
+  }));
+
+  // Chat with context
+  const response = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages: [
+      ...contextMessages,
+      { role: 'user', content: userMessage }
+    ]
+  });
+
+  // Store assistant response
+  await cencori.memory.store({
+    namespace: `chat-${userId}`,
+    content: response.content,
+    metadata: {
+      role: 'assistant',
+      timestamp: new Date().toISOString()
+    }
+  });
+
+  return response;
+}
+```
+
+### Document Q&A
+
+Index documents and answer questions:
+
+```typescript
+// 1. Index documents
+async function indexDocument(title: string, content: string) {
+  // Split into chunks (simple example)
+  const chunks = content.match(/.{1,500}/g) || [];
+
+  await cencori.memory.storeBatch(
+    'documents',
+    chunks.map((chunk, i) => ({
+      content: chunk,
+      metadata: {
+        title,
+        chunkIndex: i,
+        totalChunks: chunks.length
+      }
+    }))
+  );
+}
+
+// 2. Query documents
+async function askQuestion(question: string) {
+  return cencori.ai.rag({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: question }],
+    namespace: 'documents',
+    limit: 5
+  });
+}
+
+// Usage
+await indexDocument('Getting Started', 'Cencori is...');
+const answer = await askQuestion('What is Cencori?');
+console.log(answer.message.content);
+```
+
+### Semantic Search API
+
+Build a search endpoint:
+
+```typescript
+import express from 'express';
+import { Cencori } from 'cencori';
+
+const app = express();
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+app.post('/api/search', async (req, res) => {
+  const { query, namespace = 'default', limit = 10 } = req.body;
+
+  try {
+    const results = await cencori.memory.search({
+      namespace,
+      query,
+      limit,
+      threshold: 0.5
+    });
+
+    res.json({
+      results: results.results.map(r => ({
+        content: r.content,
+        metadata: r.metadata,
+        similarity: r.similarity
+      })),
+      count: results.count,
+      latencyMs: results.latencyMs
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(3000);
+```
+
+### Knowledge Base with TTL
+
+Store temporary knowledge:
+
+```typescript
+// Store session-specific context
+await cencori.memory.store({
+  namespace: 'sessions',
+  content: 'User is interested in enterprise pricing',
+  expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
+  metadata: {
+    sessionId: 'session_abc',
+    intent: 'pricing'
+  }
+});
+
+// Query within session
+const context = await cencori.memory.search({
+  namespace: 'sessions',
+  query: 'user preferences',
+  filter: { sessionId: 'session_abc' }
+});
+```
+
+## Best Practices
+
+### Chunk Size
+
+Keep chunks focused (300-500 tokens):
+
+```typescript
+function chunkText(text: string, chunkSize = 500): string[] {
+  const sentences = text.split(/[.!?]+/);
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences) {
+    if ((current + sentence).length > chunkSize && current) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current += sentence + '.';
+    }
+  }
+
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+```
+
+### Metadata Strategy
+
+Add rich metadata for better filtering:
+
+```typescript
+await cencori.memory.store({
+  namespace: 'docs',
+  content: 'Content here...',
+  metadata: {
+    // Source info
+    source: 'api-reference.md',
+    url: '/api-reference',
+    
+    // Classification
+    category: 'api',
+    tags: ['authentication', 'security'],
+    
+    // Versioning
+    version: '2.0',
+    lastUpdated: new Date().toISOString(),
+    
+    // Custom fields
+    language: 'en',
+    confidence: 0.95
+  }
+});
+```
+
+### Namespace Organization
+
+```typescript
+// Per-user namespaces
+`user-${userId}-conversations`
+
+// Per-project namespaces
+`project-${projectId}-docs`
+
+// Global namespaces
+'product-documentation'
+'customer-support'
+'knowledge-base'
+```
+
+## Complete Example
+
+Production-ready RAG implementation:
+
+```typescript
+import { Cencori } from 'cencori';
+
+class DocumentRAG {
+  private cencori: Cencori;
+  private namespace: string;
+
+  constructor(namespace: string) {
+    this.cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+    this.namespace = namespace;
+  }
+
+  async indexDocument(title: string, content: string) {
+    const chunks = this.chunkText(content);
+
+    const memories = await this.cencori.memory.storeBatch(
+      this.namespace,
+      chunks.map((chunk, i) => ({
+        content: chunk,
+        metadata: {
+          title,
+          chunkIndex: i,
+          totalChunks: chunks.length,
+          indexedAt: new Date().toISOString()
+        }
+      }))
+    );
+
+    return memories;
+  }
+
+  async query(question: string, options: { streaming?: boolean } = {}) {
+    if (options.streaming) {
+      return this.cencori.ai.ragStream({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: question }],
+        namespace: this.namespace,
+        limit: 5,
+        threshold: 0.6
+      });
+    }
+
+    return this.cencori.ai.rag({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: question }],
+      namespace: this.namespace,
+      limit: 5,
+      threshold: 0.6
+    });
+  }
+
+  async search(query: string) {
+    return this.cencori.memory.search({
+      namespace: this.namespace,
+      query,
+      limit: 10,
+      threshold: 0.5
+    });
+  }
+
+  private chunkText(text: string, maxSize = 500): string[] {
+    // Implement chunking logic
+    return text.match(new RegExp(`.{1,${maxSize}}`, 'g')) || [];
+  }
+}
+
+// Usage
+const rag = new DocumentRAG('company-docs');
+
+await rag.indexDocument('Overview', 'Cencori is...');
+const answer = await rag.query('What is Cencori?');
+console.log(answer.message.content);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/typescript/chat">
+    Combine RAG with chat completions
+  </Card>
+  <Card title="Streaming" icon="water" href="/sdks/typescript/streaming">
+    Stream RAG responses in real-time
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/typescript/error-handling">
+    Handle memory errors gracefully
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/rag">
+    See complete RAG examples
+  </Card>
+</CardGroup>

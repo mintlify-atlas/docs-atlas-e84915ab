@@ -1,0 +1,434 @@
+---
+title: 'Projects Management'
+description: 'Manage projects, settings, and configurations'
+---
+
+## Overview
+
+Projects are the primary organizational unit in Cencori. Each project has its own:
+
+- API keys
+- Provider configurations (BYOK)
+- Security settings
+- Rate limits
+- Budget caps
+- Memory namespaces
+- Request logs
+
+## Authentication
+
+Project management endpoints require dashboard authentication (user session).
+
+## Get Project Settings
+
+```
+GET /api/projects/{projectId}/settings
+```
+
+Retrieve project configuration and settings.
+
+### Response
+
+```json
+{
+  "id": "proj_abc123",
+  "name": "Production API",
+  "organization_id": "org_xyz789",
+  "default_model": "gemini-2.0-flash",
+  "default_provider": "google",
+  "settings": {
+    "enable_fallback": true,
+    "fallback_provider": "anthropic",
+    "max_retries_before_fallback": 3,
+    "security_enabled": true,
+    "pii_detection_enabled": true
+  },
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+## Update Project Settings
+
+```
+PATCH /api/projects/{projectId}/settings
+```
+
+Update project configuration.
+
+### Request Body
+
+```json
+{
+  "default_model": "gpt-4o",
+  "default_provider": "openai",
+  "enable_fallback": true,
+  "fallback_provider": "anthropic"
+}
+```
+
+## Provider Keys (BYOK)
+
+### Add Provider Key
+
+```
+POST /api/projects/{projectId}/provider-keys
+```
+
+Add your own provider API key (Bring Your Own Key).
+
+#### Request Body
+
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "default_model": "gpt-4o",
+  "default_image_model": "dall-e-3"
+}
+```
+
+Supported providers:
+- `openai`
+- `anthropic`
+- `google`
+- `cohere`
+- `groq`
+- `deepseek`
+- `xai`
+- `mistral`
+- `together`
+- `openrouter`
+- `perplexity`
+
+### List Provider Keys
+
+```
+GET /api/projects/{projectId}/provider-keys
+```
+
+```json
+{
+  "keys": [
+    {
+      "id": "pk_123",
+      "provider": "openai",
+      "is_active": true,
+      "default_model": "gpt-4o",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+### Delete Provider Key
+
+```
+DELETE /api/projects/{projectId}/provider-keys/{provider}
+```
+
+## Rate Limits
+
+### Get Rate Limits
+
+```
+GET /api/projects/{projectId}/rate-limits
+```
+
+```json
+{
+  "rate_limit_rpm": 1000,
+  "rate_limit_tpm": 100000,
+  "enabled": true
+}
+```
+
+### Update Rate Limits
+
+```
+PATCH /api/projects/{projectId}/rate-limits
+```
+
+```json
+{
+  "rate_limit_rpm": 2000,
+  "rate_limit_tpm": 200000
+}
+```
+
+## Budget Management
+
+### Get Budget Settings
+
+```
+GET /api/projects/{projectId}/budget
+```
+
+```json
+{
+  "spend_cap": 100.00,
+  "current_spend": 45.32,
+  "alert_threshold": 80,
+  "alerts_enabled": true
+}
+```
+
+### Update Budget
+
+```
+PATCH /api/projects/{projectId}/budget
+```
+
+```json
+{
+  "spend_cap": 200.00,
+  "alert_threshold": 90,
+  "alerts_enabled": true
+}
+```
+
+## Security Settings
+
+### Get Security Configuration
+
+```
+GET /api/projects/{projectId}/security/settings
+```
+
+```json
+{
+  "security_enabled": true,
+  "pii_detection_enabled": true,
+  "prompt_injection_detection": true,
+  "jailbreak_detection": true,
+  "output_scanning_enabled": true,
+  "blocked_patterns": [
+    "credit_card",
+    "ssn",
+    "email",
+    "phone"
+  ]
+}
+```
+
+### Update Security Settings
+
+```
+PATCH /api/projects/{projectId}/security/settings
+```
+
+```json
+{
+  "pii_detection_enabled": true,
+  "prompt_injection_detection": true
+}
+```
+
+## Custom Data Rules
+
+### List Custom Rules
+
+```
+GET /api/projects/{projectId}/custom-rules
+```
+
+```json
+{
+  "rules": [
+    {
+      "id": "rule_123",
+      "name": "Credit Card Pattern",
+      "pattern": "\\b\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}\\b",
+      "match_type": "regex",
+      "action": "mask",
+      "is_active": true,
+      "priority": 10
+    }
+  ]
+}
+```
+
+### Create Custom Rule
+
+```
+POST /api/projects/{projectId}/custom-rules
+```
+
+```json
+{
+  "name": "Internal IDs",
+  "pattern": "ID-\\d{6}",
+  "match_type": "regex",
+  "action": "redact",
+  "priority": 5
+}
+```
+
+Actions:
+- `mask` - Replace with asterisks
+- `redact` - Remove completely
+- `tokenize` - Replace with tokens
+- `block` - Block entire request
+
+### Delete Custom Rule
+
+```
+DELETE /api/projects/{projectId}/custom-rules/{ruleId}
+```
+
+## Webhooks
+
+### List Webhooks
+
+```
+GET /api/projects/{projectId}/webhooks
+```
+
+```json
+{
+  "webhooks": [
+    {
+      "id": "wh_123",
+      "url": "https://example.com/webhook",
+      "events": ["security.incident", "provider.fallback"],
+      "is_active": true,
+      "secret": "whsec_..."
+    }
+  ]
+}
+```
+
+### Create Webhook
+
+```
+POST /api/projects/{projectId}/webhooks
+```
+
+```json
+{
+  "url": "https://example.com/webhook",
+  "events": ["security.incident", "provider.fallback", "budget.alert"],
+  "secret": "my-webhook-secret"
+}
+```
+
+Events:
+- `security.incident` - Security violations
+- `provider.fallback` - Provider failover
+- `budget.alert` - Budget threshold reached
+- `rate_limit.exceeded` - Rate limit hit
+
+### Test Webhook
+
+```
+POST /api/projects/{projectId}/webhooks/{webhookId}/test
+```
+
+Sends a test event to the webhook URL.
+
+### Delete Webhook
+
+```
+DELETE /api/projects/{projectId}/webhooks/{webhookId}
+```
+
+## Analytics
+
+### Get Usage Overview
+
+```
+GET /api/projects/{projectId}/analytics/overview
+```
+
+Query parameters:
+- `time_range` - `24h`, `7d`, `30d`, `90d`
+
+```json
+{
+  "total_requests": 15420,
+  "total_tokens": 2458392,
+  "total_cost": 145.23,
+  "success_rate": 98.7,
+  "avg_latency_ms": 432,
+  "top_models": [
+    {"model": "gemini-2.0-flash", "count": 8234},
+    {"model": "gpt-4o", "count": 4521}
+  ]
+}
+```
+
+### Get Usage Trends
+
+```
+GET /api/projects/{projectId}/analytics/trends
+```
+
+Returns time-series data for visualization.
+
+## Examples
+
+### Configure BYOK
+
+```typescript
+const projectId = 'proj_abc123';
+
+// Add OpenAI key
+await fetch(`/api/projects/${projectId}/provider-keys`, {
+  method: 'POST',
+  body: JSON.stringify({
+    provider: 'openai',
+    api_key: 'sk-...',
+    default_model: 'gpt-4o'
+  })
+});
+
+// Update project to use OpenAI by default
+await fetch(`/api/projects/${projectId}/settings`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    default_provider: 'openai',
+    default_model: 'gpt-4o'
+  })
+});
+```
+
+### Set Up Security
+
+```typescript
+// Enable all security features
+await fetch(`/api/projects/${projectId}/security/settings`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    security_enabled: true,
+    pii_detection_enabled: true,
+    prompt_injection_detection: true,
+    jailbreak_detection: true,
+    output_scanning_enabled: true
+  })
+});
+
+// Add custom rule
+await fetch(`/api/projects/${projectId}/custom-rules`, {
+  method: 'POST',
+  body: JSON.stringify({
+    name: 'Company SSN',
+    pattern: '\\b\\d{3}-\\d{2}-\\d{4}\\b',
+    match_type: 'regex',
+    action: 'redact',
+    priority: 10
+  })
+});
+```
+
+### Configure Failover
+
+```typescript
+// Set up fallback chain
+await fetch(`/api/projects/${projectId}/settings`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    enable_fallback: true,
+    fallback_provider: 'anthropic',
+    max_retries_before_fallback: 3
+  })
+});
+```

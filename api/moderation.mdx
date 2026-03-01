@@ -1,0 +1,472 @@
+---
+title: 'Content Moderation'
+description: 'POST /api/ai/moderation - Screen content for policy violations'
+---
+
+## Endpoint
+
+```
+POST https://api.cencori.com/api/ai/moderation
+```
+
+Classify text for potentially harmful content using OpenAI's moderation models. Essential for content filtering, safety checks, and compliance.
+
+## Authentication
+
+Requires API key in `Authorization` header or `CENCORI_API_KEY` header.
+
+## Request Body
+
+<ParamField body="input" type="string | string[]" required>
+  Text or array of texts to moderate.
+  
+  Each text is classified independently.
+</ParamField>
+
+<ParamField body="model" type="string">
+  Moderation model to use.
+  
+  Options:
+  - `text-moderation-latest` (default) - Latest model
+  - `text-moderation-stable` - Stable version
+  - `omni-moderation-latest` - Multimodal (text + images)
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique request identifier
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model used for moderation
+</ResponseField>
+
+<ResponseField name="results" type="array">
+  Moderation results for each input
+  
+  <Expandable title="Result Object">
+    <ResponseField name="flagged" type="boolean">
+      Whether content violates content policy
+    </ResponseField>
+    <ResponseField name="categories" type="object">
+      Boolean flags for each category
+      
+      Categories:
+      - `hate` - Hate speech
+      - `hate/threatening` - Hateful threats
+      - `harassment` - Harassment
+      - `harassment/threatening` - Harassing threats
+      - `self-harm` - Self-harm content
+      - `self-harm/intent` - Intent to self-harm
+      - `self-harm/instructions` - Self-harm instructions
+      - `sexual` - Sexual content
+      - `sexual/minors` - Sexual content involving minors
+      - `violence` - Violence
+      - `violence/graphic` - Graphic violence
+    </ResponseField>
+    <ResponseField name="category_scores" type="object">
+      Confidence scores (0-1) for each category
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+### Basic Moderation
+
+```bash
+curl https://api.cencori.com/api/ai/moderation \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "I want to hurt someone"
+  }'
+```
+
+```json
+{
+  "id": "modr-abc123",
+  "model": "text-moderation-latest",
+  "results": [
+    {
+      "flagged": true,
+      "categories": {
+        "hate": false,
+        "hate/threatening": false,
+        "harassment": false,
+        "harassment/threatening": false,
+        "self-harm": false,
+        "self-harm/intent": false,
+        "self-harm/instructions": false,
+        "sexual": false,
+        "sexual/minors": false,
+        "violence": true,
+        "violence/graphic": false
+      },
+      "category_scores": {
+        "hate": 0.02,
+        "hate/threatening": 0.01,
+        "harassment": 0.03,
+        "harassment/threatening": 0.02,
+        "self-harm": 0.01,
+        "self-harm/intent": 0.01,
+        "self-harm/instructions": 0.00,
+        "sexual": 0.00,
+        "sexual/minors": 0.00,
+        "violence": 0.89,
+        "violence/graphic": 0.04
+      }
+    }
+  ]
+}
+```
+
+### Multiple Inputs
+
+```bash
+curl https://api.cencori.com/api/ai/moderation \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      "This is a safe comment",
+      "This contains inappropriate content",
+      "Another safe message"
+    ]
+  }'
+```
+
+### Using OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+
+const moderation = await client.moderations.create({
+  input: 'Text to moderate'
+});
+
+if (moderation.results[0].flagged) {
+  console.log('Content flagged!');
+  console.log('Categories:', moderation.results[0].categories);
+}
+```
+
+### Check Specific Categories
+
+```typescript
+const moderation = await client.moderations.create({
+  input: userComment
+});
+
+const result = moderation.results[0];
+
+if (result.categories.hate || result.categories['hate/threatening']) {
+  // Block hate speech
+  return { allowed: false, reason: 'Hate speech detected' };
+}
+
+if (result.categories.violence && result.category_scores.violence > 0.8) {
+  // Block high-confidence violence
+  return { allowed: false, reason: 'Violent content detected' };
+}
+
+return { allowed: true };
+```
+
+### Moderate User-Generated Content
+
+```typescript
+async function moderateContent(text: string): Promise<{
+  safe: boolean;
+  flaggedCategories: string[];
+}> {
+  const moderation = await client.moderations.create({ input: text });
+  const result = moderation.results[0];
+  
+  if (!result.flagged) {
+    return { safe: true, flaggedCategories: [] };
+  }
+  
+  const flaggedCategories = Object.entries(result.categories)
+    .filter(([_, flagged]) => flagged)
+    .map(([category]) => category);
+  
+  return { safe: false, flaggedCategories };
+}
+
+// Usage
+const comment = await request.body.comment;
+const { safe, flaggedCategories } = await moderateContent(comment);
+
+if (!safe) {
+  return Response.json({
+    error: 'Content violates policy',
+    categories: flaggedCategories
+  }, { status: 400 });
+}
+```
+
+### Content Filter Middleware
+
+```typescript
+export async function moderationMiddleware(req: Request, res: Response, next: Function) {
+  const { message } = req.body;
+  
+  const moderation = await client.moderations.create({ input: message });
+  
+  if (moderation.results[0].flagged) {
+    return res.status(400).json({
+      error: 'Content filtered',
+      message: 'Your message contains inappropriate content',
+      categories: Object.entries(moderation.results[0].categories)
+        .filter(([_, v]) => v)
+        .map(([k]) => k)
+    });
+  }
+  
+  next();
+}
+```
+
+## Use Cases
+
+### Social Media Platform
+
+```typescript
+// Before saving post
+const moderation = await client.moderations.create({
+  input: post.content
+});
+
+if (moderation.results[0].flagged) {
+  // Flag for review instead of auto-blocking
+  await db.posts.create({
+    ...post,
+    status: 'pending_review',
+    moderation_flags: moderation.results[0].categories
+  });
+} else {
+  await db.posts.create({
+    ...post,
+    status: 'published'
+  });
+}
+```
+
+### Chat Application
+
+```typescript
+// Real-time message filtering
+socket.on('message', async (data) => {
+  const moderation = await client.moderations.create({
+    input: data.message
+  });
+  
+  if (moderation.results[0].flagged) {
+    socket.emit('message_blocked', {
+      reason: 'Content policy violation'
+    });
+    return;
+  }
+  
+  // Broadcast to other users
+  socket.broadcast.emit('message', data);
+});
+```
+
+### Content Management System
+
+```typescript
+// Moderate before publishing
+const moderateArticle = async (article: Article) => {
+  const content = `${article.title} ${article.body}`;
+  
+  const moderation = await client.moderations.create({ input: content });
+  const result = moderation.results[0];
+  
+  return {
+    canPublish: !result.flagged,
+    requiresReview: result.flagged,
+    flags: result.categories,
+    scores: result.category_scores
+  };
+};
+```
+
+### Email System
+
+```typescript
+// Filter email content
+const moderateEmail = async (subject: string, body: string) => {
+  const moderation = await client.moderations.create({
+    input: [subject, body]
+  });
+  
+  const anyFlagged = moderation.results.some(r => r.flagged);
+  
+  if (anyFlagged) {
+    // Move to spam/quarantine
+    return { allowed: false, action: 'quarantine' };
+  }
+  
+  return { allowed: true };
+};
+```
+
+## Category Descriptions
+
+| Category | Description |
+|----------|-------------|
+| `hate` | Content expressing hate based on identity |
+| `hate/threatening` | Hate content with violence threats |
+| `harassment` | Content intended to harass or bully |
+| `harassment/threatening` | Harassment with threats |
+| `self-harm` | Content promoting self-harm |
+| `self-harm/intent` | Intent to engage in self-harm |
+| `self-harm/instructions` | Instructions for self-harm |
+| `sexual` | Sexual content |
+| `sexual/minors` | Sexual content involving minors |
+| `violence` | Content depicting violence |
+| `violence/graphic` | Graphic violent content |
+
+## Best Practices
+
+1. **Moderate all user content**
+   - Posts, comments, messages
+   - User profiles, bios
+   - File names, metadata
+
+2. **Set appropriate thresholds**
+   - Auto-block high-confidence violations
+   - Flag medium-confidence for review
+   - Allow low-confidence content
+
+3. **Combine with other safety measures**
+   - Use alongside Cencori's built-in security
+   - Add custom rules for specific terms
+   - Implement human review for edge cases
+
+4. **Batch requests**
+   - Moderate multiple texts in one request
+   - Reduces API calls and latency
+
+5. **Handle false positives**
+   - Allow users to appeal
+   - Implement human review queue
+   - Track accuracy metrics
+
+6. **Privacy considerations**
+   - Don't log user content unnecessarily
+   - Comply with data protection regulations
+   - Inform users about content moderation
+
+## Security Integration
+
+When content is flagged, Cencori automatically:
+
+1. Logs a security incident
+2. Tracks in your security dashboard
+3. Can trigger webhooks
+4. Includes in audit logs
+
+```json
+{
+  "project_id": "proj_abc123",
+  "incident_type": "content_moderation",
+  "severity": "medium",
+  "description": "Content flagged for: hate, violence",
+  "metadata": {
+    "categories": ["hate", "violence"],
+    "request_id": "req_xyz789"
+  }
+}
+```
+
+## Error Responses
+
+### Missing Input
+
+```json
+{
+  "error": "bad_request",
+  "message": "Input is required"
+}
+```
+
+HTTP Status: `400`
+
+### Provider Not Configured
+
+```json
+{
+  "error": "provider_not_configured",
+  "message": "No OpenAI API key configured"
+}
+```
+
+HTTP Status: `400`
+
+## Rate Limits
+
+Moderation requests count toward monthly quota:
+
+- Free: 1,000 requests/month
+- Pro: 50,000 requests/month
+- Enterprise: Custom limits
+
+Batch requests count as one request.
+
+## Pricing
+
+**OpenAI Moderation API is free!**
+
+Cencori passes through at no additional charge:
+- Provider cost: $0.00
+- Cencori charge: $0.00
+
+Only standard request quota limits apply.
+
+## List Available Models
+
+```bash
+curl https://api.cencori.com/api/ai/moderation \
+  -H "Authorization: Bearer $CENCORI_API_KEY"
+```
+
+```json
+{
+  "models": [
+    {
+      "id": "text-moderation-latest",
+      "description": "Latest moderation model"
+    },
+    {
+      "id": "text-moderation-stable",
+      "description": "Stable moderation model"
+    },
+    {
+      "id": "omni-moderation-latest",
+      "description": "Multimodal moderation (text + images)"
+    }
+  ],
+  "categories": [
+    "hate",
+    "hate/threatening",
+    "harassment",
+    "harassment/threatening",
+    "self-harm",
+    "self-harm/intent",
+    "self-harm/instructions",
+    "sexual",
+    "sexual/minors",
+    "violence",
+    "violence/graphic"
+  ]
+}
+```

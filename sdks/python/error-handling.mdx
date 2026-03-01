@@ -1,0 +1,487 @@
+---
+title: "Error Handling"
+description: "Learn how to handle errors gracefully in the Python SDK with proper exception handling, retry logic, and debugging."
+---
+
+## Error Types
+
+The Python SDK provides specific exception classes for different error scenarios:
+
+```python
+from cencori import (
+    CencoriError,           # Base exception
+    AuthenticationError,    # Invalid API key
+    RateLimitError,        # Too many requests
+    SafetyError,           # Content blocked
+    InsufficientCreditsError,  # Account credits low
+    ProviderError,         # Upstream provider error
+)
+```
+
+## Basic Error Handling
+
+Catch specific exceptions to handle different error types:
+
+```python
+from cencori import Cencori, AuthenticationError, RateLimitError, SafetyError
+
+cencori = Cencori(api_key="csk_...")
+
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    print(response.content)
+    
+except AuthenticationError:
+    print("Error: Invalid API key")
+    print("Check your API key at https://cencori.com/dashboard")
+    
+except RateLimitError:
+    print("Error: Rate limit exceeded")
+    print("Please slow down your requests")
+    
+except SafetyError as e:
+    print(f"Error: Content blocked by safety filters")
+    print(f"Reasons: {e.reasons}")
+    
+except CencoriError as e:
+    print(f"Error: {e.message}")
+    print(f"Status code: {e.status_code}")
+```
+
+## Exception Details
+
+### AuthenticationError
+
+Raised when the API key is invalid or missing:
+
+```python
+try:
+    cencori = Cencori(api_key="invalid_key")
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+    print(f"Status code: {e.status_code}")  # 401
+    print(f"Error code: {e.code}")  # INVALID_API_KEY
+```
+
+### RateLimitError
+
+Raised when you exceed rate limits:
+
+```python
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except RateLimitError as e:
+    print(f"Rate limit hit: {e.message}")
+    print(f"Status code: {e.status_code}")  # 429
+    print(f"Error code: {e.code}")  # RATE_LIMIT_EXCEEDED
+```
+
+### SafetyError
+
+Raised when content violates safety policies:
+
+```python
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Harmful content..."}]
+    )
+except SafetyError as e:
+    print(f"Content blocked: {e.message}")
+    print(f"Status code: {e.status_code}")  # 400
+    print(f"Error code: {e.code}")  # SAFETY_VIOLATION
+    print(f"Reasons: {e.reasons}")  # List of violation reasons
+```
+
+### InsufficientCreditsError
+
+Raised when account credits are insufficient:
+
+```python
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except InsufficientCreditsError as e:
+    print(f"No credits: {e.message}")
+    print(f"Status code: {e.status_code}")  # 402
+    print("Please add credits at https://cencori.com/billing")
+```
+
+### ProviderError
+
+Raised when upstream providers (OpenAI, Anthropic, Google) return errors:
+
+```python
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except ProviderError as e:
+    print(f"Provider error: {e.message}")
+    print(f"Status code: {e.status_code}")  # 502
+    print("This error is usually temporary. Please retry.")
+```
+
+## Retry Logic
+
+Implement exponential backoff for transient errors:
+
+```python
+import time
+from cencori import Cencori, RateLimitError, ProviderError
+
+def chat_with_retry(cencori, messages, max_retries=3):
+    """Chat with exponential backoff retry."""
+    for attempt in range(max_retries):
+        try:
+            return cencori.ai.chat(messages=messages)
+        
+        except (RateLimitError, ProviderError) as e:
+            if attempt == max_retries - 1:
+                raise  # Re-raise on last attempt
+            
+            # Exponential backoff: 1s, 2s, 4s
+            wait_time = 2 ** attempt
+            print(f"Retry {attempt + 1}/{max_retries} after {wait_time}s...")
+            time.sleep(wait_time)
+
+# Usage
+cencori = Cencori(api_key="csk_...")
+response = chat_with_retry(
+    cencori,
+    messages=[{"role": "user", "content": "Hello"}]
+)
+```
+
+## Async Error Handling
+
+Handle errors in async code:
+
+```python
+import asyncio
+from cencori import Cencori, AuthenticationError, RateLimitError
+
+async def async_chat_safe(cencori, messages):
+    try:
+        response = await cencori.ai.async_chat(messages=messages)
+        return response.content
+    
+    except AuthenticationError:
+        return "Error: Invalid API key"
+    
+    except RateLimitError:
+        # Wait and retry once
+        await asyncio.sleep(2)
+        response = await cencori.ai.async_chat(messages=messages)
+        return response.content
+    
+    except Exception as e:
+        return f"Unexpected error: {e}"
+
+# Usage
+async def main():
+    cencori = Cencori(api_key="csk_...")
+    result = await async_chat_safe(
+        cencori,
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+    print(result)
+
+asyncio.run(main())
+```
+
+## Streaming Error Handling
+
+Handle errors during streaming:
+
+```python
+from cencori import Cencori, CencoriError
+
+cencori = Cencori(api_key="csk_...")
+
+try:
+    for chunk in cencori.ai.chat_stream(
+        messages=[{"role": "user", "content": "Hello"}]
+    ):
+        # Check for errors in stream
+        if chunk.error:
+            print(f"Stream error: {chunk.error}")
+            break
+        
+        print(chunk.delta, end="", flush=True)
+        
+except CencoriError as e:
+    print(f"\nStream failed: {e.message}")
+```
+
+## Validation Errors
+
+Handle client-side validation errors:
+
+```python
+try:
+    # Missing API key
+    cencori = Cencori()  # No api_key or CENCORI_API_KEY env var
+    
+except ValueError as e:
+    print(f"Validation error: {e}")
+    # "Cencori API key is required. Pass it via Cencori(api_key='csk_...') 
+    # or set CENCORI_API_KEY environment variable."
+```
+
+## Logging
+
+Log errors for debugging:
+
+```python
+import logging
+from cencori import Cencori, CencoriError
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+cencori = Cencori(api_key="csk_...")
+
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+    logger.info(f"Chat successful: {response.usage.total_tokens} tokens")
+    
+except CencoriError as e:
+    logger.error(
+        f"Chat failed: {e.message}",
+        extra={
+            "status_code": e.status_code,
+            "error_code": e.code,
+        }
+    )
+```
+
+## Graceful Degradation
+
+Provide fallback behavior when errors occur:
+
+```python
+def chat_with_fallback(cencori, messages, fallback_response="Sorry, I'm unavailable."):
+    """Chat with graceful fallback."""
+    try:
+        response = cencori.ai.chat(messages=messages)
+        return response.content
+    
+    except SafetyError as e:
+        return f"I can't respond to that. Reasons: {', '.join(e.reasons)}"
+    
+    except RateLimitError:
+        return "I'm experiencing high demand. Please try again shortly."
+    
+    except CencoriError as e:
+        logging.error(f"Chat error: {e}")
+        return fallback_response
+
+# Usage
+result = chat_with_fallback(
+    cencori,
+    messages=[{"role": "user", "content": "Hello"}]
+)
+print(result)
+```
+
+## Error Recovery
+
+Implement comprehensive error recovery:
+
+```python
+import time
+from typing import Optional
+from cencori import (
+    Cencori,
+    CencoriError,
+    AuthenticationError,
+    RateLimitError,
+    ProviderError,
+)
+
+class ResilientChat:
+    def __init__(self, api_key: str, max_retries: int = 3):
+        self.cencori = Cencori(api_key=api_key)
+        self.max_retries = max_retries
+    
+    def chat(self, messages, **kwargs) -> Optional[str]:
+        """Chat with comprehensive error handling."""
+        for attempt in range(self.max_retries):
+            try:
+                response = self.cencori.ai.chat(messages=messages, **kwargs)
+                return response.content
+            
+            except AuthenticationError:
+                print("Invalid API key. Please check your credentials.")
+                return None
+            
+            except RateLimitError:
+                if attempt < self.max_retries - 1:
+                    wait = 2 ** attempt
+                    print(f"Rate limited. Waiting {wait}s...")
+                    time.sleep(wait)
+                else:
+                    print("Rate limit persists. Please try later.")
+                    return None
+            
+            except ProviderError:
+                if attempt < self.max_retries - 1:
+                    print(f"Provider error. Retrying ({attempt + 1}/{self.max_retries})...")
+                    time.sleep(1)
+                else:
+                    print("Provider unavailable. Please try later.")
+                    return None
+            
+            except CencoriError as e:
+                print(f"Error: {e.message}")
+                return None
+        
+        return None
+
+# Usage
+chat = ResilientChat(api_key="csk_...")
+response = chat.chat(
+    messages=[{"role": "user", "content": "Hello"}]
+)
+
+if response:
+    print(f"Response: {response}")
+else:
+    print("Failed to get response")
+```
+
+## Debugging
+
+Get detailed error information:
+
+```python
+from cencori import Cencori, CencoriError
+
+cencori = Cencori(api_key="csk_...")
+
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except CencoriError as e:
+    # Detailed error info
+    print(f"Error message: {e.message}")
+    print(f"HTTP status: {e.status_code}")
+    print(f"Error code: {e.code}")
+    print(f"Full exception: {str(e)}")
+    
+    # Check specific error type
+    if e.status_code == 401:
+        print("Authentication issue detected")
+    elif e.status_code == 429:
+        print("Rate limit issue detected")
+```
+
+## Best Practices
+
+### Always Use Try-Catch
+
+```python
+# Bad: No error handling
+response = cencori.ai.chat(messages=[...])
+
+# Good: Proper error handling
+try:
+    response = cencori.ai.chat(messages=[...])
+except CencoriError as e:
+    handle_error(e)
+```
+
+### Handle Specific Exceptions First
+
+```python
+try:
+    response = cencori.ai.chat(messages=[...])
+except AuthenticationError:  # Most specific
+    # Handle auth error
+    pass
+except RateLimitError:  # Specific
+    # Handle rate limit
+    pass
+except CencoriError:  # Generic (catch-all)
+    # Handle other errors
+    pass
+```
+
+### Don't Swallow Exceptions
+
+```python
+# Bad: Silent failure
+try:
+    response = cencori.ai.chat(messages=[...])
+except:
+    pass  # Error lost!
+
+# Good: Log or handle
+try:
+    response = cencori.ai.chat(messages=[...])
+except CencoriError as e:
+    logger.error(f"Chat failed: {e}")
+    raise  # Re-raise if appropriate
+```
+
+### Use Context Managers
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def cencori_session(api_key):
+    cencori = Cencori(api_key=api_key)
+    try:
+        yield cencori
+    except CencoriError as e:
+        logger.error(f"Session error: {e}")
+        raise
+
+# Usage
+with cencori_session("csk_...") as cencori:
+    response = cencori.ai.chat(messages=[...])
+```
+
+## Testing Error Handling
+
+Test your error handling code:
+
+```python
+import pytest
+from cencori import Cencori, AuthenticationError
+
+def test_invalid_api_key():
+    cencori = Cencori(api_key="invalid_key")
+    
+    with pytest.raises(AuthenticationError):
+        cencori.ai.chat(
+            messages=[{"role": "user", "content": "Hello"}]
+        )
+
+def test_error_recovery():
+    # Test with mocked responses
+    pass
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/python/chat">
+    Learn about chat completions
+  </Card>
+  <Card title="Streaming" icon="bolt" href="/sdks/python/streaming">
+    Handle streaming errors
+  </Card>
+</CardGroup>

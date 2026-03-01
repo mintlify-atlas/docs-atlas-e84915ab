@@ -1,0 +1,481 @@
+---
+title: CI/CD Integration
+description: Integrate Cencori Scan into GitHub Actions, GitLab CI, CircleCI, and other CI/CD pipelines
+---
+
+# CI/CD Integration
+
+Integrate Cencori Scan into your continuous integration pipeline to catch security issues before they reach production.
+
+## GitHub Actions
+
+### Basic Security Scan
+
+Add to `.github/workflows/security.yml`:
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Cencori Scan
+        run: npx @cencori/scan --json > scan-results.json
+      
+      - name: Check for failures
+        run: |
+          SCORE=$(jq -r '.score' scan-results.json)
+          if [[ "$SCORE" == "F" ]]; then
+            echo "Security scan failed with F-Tier score"
+            exit 1
+          fi
+```
+
+### With JSON Artifact Upload
+
+Save scan results as artifacts:
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Security Scan
+        run: npx @cencori/scan --json --no-prompt > scan-results.json
+        continue-on-error: true
+      
+      - name: Upload Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-results
+          path: scan-results.json
+      
+      - name: Check Security Score
+        run: |
+          SCORE=$(jq -r '.score' scan-results.json)
+          echo "Security Score: $SCORE"
+          
+          if [[ "$SCORE" == "F" ]]; then
+            echo "::error::Critical security issues found (F-Tier)"
+            exit 1
+          elif [[ "$SCORE" == "D" ]]; then
+            echo "::warning::Significant security issues found (D-Tier)"
+            exit 1
+          fi
+```
+
+### PR Comment Integration
+
+Post scan results as PR comments:
+
+```yaml
+name: Security Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Cencori Scan
+        id: scan
+        run: |
+          npx @cencori/scan --json --no-prompt > scan-results.json
+          echo "score=$(jq -r '.score' scan-results.json)" >> $GITHUB_OUTPUT
+          echo "issues=$(jq -r '.issues | length' scan-results.json)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('scan-results.json'));
+            
+            const score = results.score;
+            const emoji = score === 'A' ? '✅' : score === 'F' ? '❌' : '⚠️';
+            
+            const body = `## ${emoji} Security Scan: ${score}-Tier\n\n` +
+              `**Files Scanned:** ${results.filesScanned}\\n` +
+              `**Issues Found:** ${results.issues.length}\\n\\n` +
+              `**Summary:**\\n` +
+              `- Critical: ${results.summary.critical}\\n` +
+              `- High: ${results.summary.high}\\n` +
+              `- Medium: ${results.summary.medium}\\n` +
+              `- Low: ${results.summary.low}`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+```
+
+## GitLab CI
+
+Add to `.gitlab-ci.yml`:
+
+```yaml
+security-scan:
+  image: node:18
+  stage: test
+  script:
+    - npx @cencori/scan --json --no-prompt > scan-results.json
+    - |
+      SCORE=$(jq -r '.score' scan-results.json)
+      echo "Security Score: $SCORE"
+      if [ "$SCORE" = "F" ]; then
+        echo "Critical security issues found"
+        exit 1
+      fi
+  artifacts:
+    reports:
+      junit: scan-results.json
+    when: always
+```
+
+## CircleCI
+
+Add to `.circleci/config.yml`:
+
+```yaml
+version: 2.1
+
+jobs:
+  security-scan:
+    docker:
+      - image: cimg/node:18.0
+    steps:
+      - checkout
+      - run:
+          name: Run Security Scan
+          command: |
+            npx @cencori/scan --json --no-prompt > scan-results.json
+            SCORE=$(jq -r '.score' scan-results.json)
+            echo "Security Score: $SCORE"
+            if [ "$SCORE" = "F" ]; then
+              exit 1
+            fi
+      - store_artifacts:
+          path: scan-results.json
+
+workflows:
+  test:
+    jobs:
+      - security-scan
+```
+
+## Jenkins
+
+Add to `Jenkinsfile`:
+
+```groovy
+pipeline {
+    agent any
+    
+    stages {
+        stage('Security Scan') {
+            steps {
+                sh 'npx @cencori/scan --json --no-prompt > scan-results.json'
+                script {
+                    def results = readJSON file: 'scan-results.json'
+                    echo "Security Score: ${results.score}"
+                    
+                    if (results.score == 'F') {
+                        error "Critical security issues detected"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: 'scan-results.json', allowEmptyArchive: true
+        }
+    }
+}
+```
+
+## Travis CI
+
+Add to `.travis.yml`:
+
+```yaml
+language: node_js
+node_js:
+  - 18
+
+script:
+  - npx @cencori/scan --json --no-prompt > scan-results.json
+  - |
+    SCORE=$(jq -r '.score' scan-results.json)
+    echo "Security Score: $SCORE"
+    if [ "$SCORE" = "F" ]; then
+      exit 1
+    fi
+```
+
+## Pre-commit Hook
+
+Block commits with security issues using Husky:
+
+### 1. Install Husky
+
+```bash
+npm install -D husky
+npx husky init
+```
+
+### 2. Add Pre-commit Hook
+
+Create `.husky/pre-commit`:
+
+```bash
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running security scan..."
+npx @cencori/scan --quiet --no-prompt
+
+if [ $? -ne 0 ]; then
+  echo "❌ Security issues detected. Commit blocked."
+  echo "Run 'npx @cencori/scan' to see details."
+  exit 1
+fi
+
+echo "✓ Security scan passed"
+```
+
+### 3. Make Executable
+
+```bash
+chmod +x .husky/pre-commit
+```
+
+## Environment Variables
+
+### Set API Key in CI
+
+For AI-powered features, add your API key as a secret:
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    1. Go to Settings → Secrets and variables → Actions
+    2. Add `CENCORI_API_KEY` secret
+    3. Use in workflow:
+    
+    ```yaml
+    - name: Run Scan with AI
+      env:
+        CENCORI_API_KEY: ${{ secrets.CENCORI_API_KEY }}
+      run: npx @cencori/scan
+    ```
+  </Tab>
+  
+  <Tab title="GitLab CI">
+    1. Go to Settings → CI/CD → Variables
+    2. Add `CENCORI_API_KEY` variable (masked)
+    3. Use in pipeline:
+    
+    ```yaml
+    security-scan:
+      script:
+        - export CENCORI_API_KEY=$CENCORI_API_KEY
+        - npx @cencori/scan
+    ```
+  </Tab>
+  
+  <Tab title="CircleCI">
+    1. Go to Project Settings → Environment Variables
+    2. Add `CENCORI_API_KEY`
+    3. Use in config (automatically available)
+  </Tab>
+</Tabs>
+
+## Fail Conditions
+
+Customize when the scan should fail the pipeline:
+
+### Fail on F-Tier Only
+
+```bash
+SCORE=$(jq -r '.score' scan-results.json)
+if [[ "$SCORE" == "F" ]]; then
+  exit 1
+fi
+```
+
+### Fail on D or F Tier
+
+```bash
+SCORE=$(jq -r '.score' scan-results.json)
+if [[ "$SCORE" == "F" || "$SCORE" == "D" ]]; then
+  exit 1
+fi
+```
+
+### Fail on Critical Issues
+
+```bash
+CRITICAL=$(jq -r '.summary.critical' scan-results.json)
+if [ $CRITICAL -gt 0 ]; then
+  echo "Found $CRITICAL critical security issues"
+  exit 1
+fi
+```
+
+### Fail on Issue Count
+
+```bash
+ISSUES=$(jq -r '.issues | length' scan-results.json)
+if [ $ISSUES -gt 5 ]; then
+  echo "Too many security issues: $ISSUES"
+  exit 1
+fi
+```
+
+## Scan Specific Directories
+
+Scan only production code:
+
+```yaml
+- name: Scan Production Code
+  run: npx @cencori/scan ./src --json --no-prompt
+```
+
+## Cache for Faster Scans
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    ```yaml
+    - name: Cache npm dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+    ```
+  </Tab>
+  
+  <Tab title="GitLab CI">
+    ```yaml
+    cache:
+      paths:
+        - node_modules/
+        - .npm/
+    ```
+  </Tab>
+</Tabs>
+
+## Parse Results in CI
+
+### Extract Specific Data
+
+```bash
+# Get score
+jq -r '.score' scan-results.json
+
+# Count issues by severity
+jq -r '.summary.critical' scan-results.json
+jq -r '.summary.high' scan-results.json
+
+# List all secret issues
+jq '.issues[] | select(.type == "secret") | .file' scan-results.json
+
+# Count files scanned
+jq -r '.filesScanned' scan-results.json
+```
+
+### Format for Slack
+
+```bash
+SCORE=$(jq -r '.score' scan-results.json)
+ISSUES=$(jq -r '.issues | length' scan-results.json)
+
+curl -X POST -H 'Content-type: application/json' \
+  --data "{ \
+    'text': 'Security Scan: ${SCORE}-Tier with ${ISSUES} issues' \
+  }" \
+  $SLACK_WEBHOOK_URL
+```
+
+## Best Practices
+
+<Tip>
+  Always use `--no-prompt` flag in CI to prevent interactive prompts from hanging builds.
+</Tip>
+
+<Tip>
+  Use `--json` output for easy parsing and integration with other tools.
+</Tip>
+
+<Tip>
+  Store scan results as artifacts for historical tracking and debugging.
+</Tip>
+
+<Warning>
+  Don't commit the `.cencori-fixes.json` file to version control. Add it to `.gitignore`.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Scan hangs in CI">
+    Make sure to use the `--no-prompt` flag:
+    
+    ```bash
+    npx @cencori/scan --no-prompt
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission denied errors">
+    GitHub Actions may need explicit permissions:
+    
+    ```yaml
+    permissions:
+      contents: read
+      pull-requests: write
+    ```
+  </Accordion>
+  
+  <Accordion title="npx not found">
+    Ensure Node.js is installed in your CI environment:
+    
+    ```yaml
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="GitHub Integration" icon="github" href="/scan/github-integration">
+    Advanced GitHub Actions workflows
+  </Card>
+  
+  <Card title="Web Scanner" icon="globe" href="/scan/web-scanner">
+    Scan repositories via web dashboard
+  </Card>
+</CardGroup>

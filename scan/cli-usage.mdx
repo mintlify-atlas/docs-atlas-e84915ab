@@ -1,0 +1,285 @@
+---
+title: CLI Usage
+description: Complete guide to Cencori Scan command-line interface with all commands, flags, and options
+---
+
+# CLI Usage
+
+Cencori Scan provides a powerful command-line interface for security scanning and changelog generation.
+
+## Basic Scan
+
+### Scan Current Directory
+
+```bash
+npx @cencori/scan
+```
+
+Scans the current directory and all subdirectories for security issues.
+
+### Scan Specific Path
+
+```bash
+npx @cencori/scan ./my-project
+```
+
+Scans a specific directory path.
+
+## Command-Line Flags
+
+<ResponseField name="--json" type="flag">
+  Output results as JSON instead of formatted text. Perfect for CI/CD pipelines.
+  
+  ```bash
+  npx @cencori/scan --json
+  ```
+</ResponseField>
+
+<ResponseField name="--quiet" type="flag">
+  Minimal output - shows only the security score.
+  
+  ```bash
+  npx @cencori/scan --quiet
+  ```
+  
+  Output:
+  ```
+  Score: D-Tier
+  ```
+</ResponseField>
+
+<ResponseField name="--no-prompt" type="flag">
+  Skip interactive prompts (auto-fix, etc). Essential for CI/CD environments.
+  
+  ```bash
+  npx @cencori/scan --no-prompt
+  ```
+</ResponseField>
+
+<ResponseField name="--no-color" type="flag">
+  Disable colored output for logs and CI systems that don't support ANSI colors.
+  
+  ```bash
+  npx @cencori/scan --no-color
+  ```
+</ResponseField>
+
+<ResponseField name="--version" type="flag">
+  Display the current version.
+  
+  ```bash
+  npx @cencori/scan --version
+  ```
+</ResponseField>
+
+## JSON Output Format
+
+When using `--json`, the scanner outputs structured data:
+
+```json
+{
+  "score": "D",
+  "tierDescription": "Poor. Significant security issues detected.",
+  "filesScanned": 142,
+  "scanDuration": 89,
+  "summary": {
+    "secrets": 3,
+    "pii": 0,
+    "routes": 2,
+    "config": 1,
+    "vulnerabilities": 2,
+    "critical": 2,
+    "high": 3,
+    "medium": 2,
+    "low": 1
+  },
+  "issues": [
+    {
+      "type": "secret",
+      "severity": "critical",
+      "name": "OpenAI API Key",
+      "provider": "OpenAI",
+      "file": "src/api.ts",
+      "line": 12,
+      "column": 15,
+      "match": "sk-p****",
+      "description": "Hardcoded API key - use environment variables"
+    }
+  ]
+}
+```
+
+## Combining Flags
+
+Flags can be combined for different use cases:
+
+<CodeGroup>
+
+```bash CI/CD Mode
+# Quiet JSON output for pipelines
+npx @cencori/scan --json --no-prompt --no-color
+```
+
+```bash Quick Check
+# Just show the score
+npx @cencori/scan --quiet
+```
+
+```bash Specific Path + JSON
+# Scan and output JSON
+npx @cencori/scan ./src --json
+```
+
+</CodeGroup>
+
+## Exit Codes
+
+The scanner uses exit codes for CI/CD integration:
+
+<ResponseField name="0" type="Success">
+  Security score is A-Tier or B-Tier (safe to deploy)
+</ResponseField>
+
+<ResponseField name="1" type="Failure">
+  Security score is C-Tier, D-Tier, or F-Tier (issues found)
+</ResponseField>
+
+Example CI usage:
+
+```bash
+#!/bin/bash
+npx @cencori/scan --json --no-prompt
+
+if [ $? -eq 0 ]; then
+  echo "✓ Security scan passed"
+else
+  echo "✗ Security issues detected"
+  exit 1
+fi
+```
+
+## Changelog Command
+
+Generate AI-powered changelogs from git history:
+
+```bash
+npx @cencori/scan changelog
+```
+
+### Changelog Options
+
+<ResponseField name="--since <time>" type="string" default="1 week ago">
+  Time range for commits. Accepts natural language.
+  
+  ```bash
+  npx @cencori/scan changelog --since="2 weeks ago"
+  npx @cencori/scan changelog --since="1 month ago"
+  ```
+</ResponseField>
+
+<ResponseField name="--output <file>" type="string">
+  Save changelog to a file instead of stdout.
+  
+  ```bash
+  npx @cencori/scan changelog --output=CHANGELOG.md
+  ```
+</ResponseField>
+
+<ResponseField name="--format <format>" type="markdown | json" default="markdown">
+  Output format for the changelog.
+  
+  ```bash
+  npx @cencori/scan changelog --format=json
+  ```
+</ResponseField>
+
+### Changelog Examples
+
+<CodeGroup>
+
+```bash Weekly Changelog
+# Generate last week's changelog
+npx @cencori/scan changelog
+```
+
+```bash Save to File
+# Save to CHANGELOG.md
+npx @cencori/scan changelog --output=CHANGELOG.md
+```
+
+```bash Custom Range
+# Last 2 weeks as JSON
+npx @cencori/scan changelog --since="2 weeks ago" --format=json
+```
+
+```bash Monthly Release
+# Generate monthly changelog
+npx @cencori/scan changelog --since="1 month ago" --output=RELEASE-NOTES.md
+```
+
+</CodeGroup>
+
+## Programmatic Usage
+
+Use the scanner in Node.js scripts:
+
+```typescript
+import { scan } from '@cencori/scan';
+
+const result = await scan('./my-project');
+
+console.log(result.score);        // 'A' | 'B' | 'C' | 'D' | 'F'
+console.log(result.issues);       // Array of detected issues
+console.log(result.filesScanned); // Number of files scanned
+console.log(result.scanDuration); // Time in milliseconds
+```
+
+### TypeScript Types
+
+```typescript
+interface ScanResult {
+  score: 'A' | 'B' | 'C' | 'D' | 'F';
+  tierDescription: string;
+  issues: ScanIssue[];
+  filesScanned: number;
+  scanDuration: number;
+  summary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+}
+
+interface ScanIssue {
+  type: 'secret' | 'pii' | 'route' | 'config' | 'vulnerability';
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  name: string;
+  match: string;
+  file: string;
+  line: number;
+  description?: string;
+}
+```
+
+## Performance Tips
+
+<Tip>
+  The scanner automatically ignores common directories like `node_modules`, `.git`, `dist`, and `build` for faster scans.
+</Tip>
+
+<Warning>
+  Large codebases (10,000+ files) may take 30-60 seconds. Use `--quiet` for faster feedback.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Auto-Fix" icon="wand-magic-sparkles" href="/scan/ai-autofix">
+    Automatically fix detected issues
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="code-branch" href="/scan/ci-cd-integration">
+    Add to your deployment pipeline
+  </Card>
+</CardGroup>

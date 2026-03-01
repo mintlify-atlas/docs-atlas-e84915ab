@@ -1,0 +1,415 @@
+---
+title: Chat API
+description: Complete guide to chat completions, multimodal input, tool calling, and structured output
+---
+
+# Chat API
+
+The Chat API provides a unified interface for chat completions across all major AI providers. Use the same API to call OpenAI, Anthropic, Google, Meta, and more.
+
+## Basic Usage
+
+### Simple Chat Completion
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'user', content: 'What is TypeScript?' }
+  ]
+});
+
+console.log(response.content);
+```
+
+See `packages/sdk/src/ai/index.ts:106`
+
+### Multi-Turn Conversation
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful coding assistant.' },
+    { role: 'user', content: 'What is async/await?' },
+    { role: 'assistant', content: 'Async/await is a syntax for handling asynchronous operations...' },
+    { role: 'user', content: 'Can you show me an example?' }
+  ]
+});
+```
+
+## Supported Models
+
+Cencori routes requests to the appropriate provider automatically:
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```typescript
+    await cencori.ai.chat({
+      model: 'gpt-4o',           // Latest GPT-4o
+      model: 'gpt-4o-mini',      // Fast, cost-effective
+      model: 'gpt-4-turbo',      // GPT-4 Turbo
+      model: 'gpt-3.5-turbo',    // Fast, cheap
+      messages
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Anthropic">
+    ```typescript
+    await cencori.ai.chat({
+      model: 'claude-3-opus',    // Most capable
+      model: 'claude-3-sonnet',  // Balanced
+      model: 'claude-3-haiku',   // Fast, cheap
+      messages
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Google">
+    ```typescript
+    await cencori.ai.chat({
+      model: 'gemini-2.5-flash', // Latest, fastest
+      model: 'gemini-1.5-pro',   // Most capable
+      model: 'gemini-1.0-pro',   // Stable
+      messages
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Meta">
+    ```typescript
+    await cencori.ai.chat({
+      model: 'llama-3.1-70b',    // Large
+      model: 'llama-3.1-8b',     // Small, fast
+      messages
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Message Types
+
+### System Messages
+
+Set the AI's behavior and context:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { 
+      role: 'system', 
+      content: 'You are an expert TypeScript developer. Answer concisely and provide code examples.' 
+    },
+    { role: 'user', content: 'How do I type a generic function?' }
+  ]
+});
+```
+
+### User Messages
+
+The user's input:
+
+```typescript
+{ role: 'user', content: 'What is Cencori?' }
+```
+
+### Assistant Messages
+
+Previous AI responses (for multi-turn conversations):
+
+```typescript
+{ role: 'assistant', content: 'Cencori is a unified AI infrastructure platform...' }
+```
+
+### Tool Messages
+
+Results from tool/function calls:
+
+```typescript
+{ 
+  role: 'tool', 
+  content: JSON.stringify({ temperature: 72 }),
+  tool_call_id: 'call_abc123'
+}
+```
+
+See `packages/sdk/src/types.ts:24` for the `ChatMessage` type definition.
+
+## Multimodal Input
+
+### Image URLs
+
+Send images with your messages:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is in this image?' },
+        { 
+          type: 'image_url', 
+          image_url: { 
+            url: 'https://example.com/image.jpg',
+            detail: 'high' // 'auto' | 'low' | 'high'
+          }
+        }
+      ]
+    }
+  ]
+});
+```
+
+### Base64 Images
+
+Embed images directly:
+
+```typescript
+import fs from 'fs';
+
+const imageBuffer = fs.readFileSync('image.jpg');
+const base64Image = imageBuffer.toString('base64');
+
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Describe this image' },
+        { 
+          type: 'image', 
+          image: `data:image/jpeg;base64,${base64Image}`
+        }
+      ]
+    }
+  ]
+});
+```
+
+See `packages/sdk/src/types.ts:35` for `MessageContent` type definition.
+
+## Parameters
+
+### Temperature
+
+Control randomness (0.0 = deterministic, 2.0 = creative):
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages,
+  temperature: 0.7 // default: 1.0
+});
+```
+
+### Max Tokens
+
+Limit response length:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages,
+  maxTokens: 500 // default: unlimited
+});
+```
+
+## Tool Calling (Function Calling)
+
+Let the AI call functions to perform actions:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'user', content: 'What is the weather in San Francisco?' }
+  ],
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'get_weather',
+        description: 'Get the current weather for a location',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: { type: 'string', description: 'City name' },
+            unit: { type: 'string', enum: ['celsius', 'fahrenheit'] }
+          },
+          required: ['location']
+        }
+      }
+    }
+  ],
+  toolChoice: 'auto' // 'auto' | 'none' | 'required' | { type: 'function', function: { name: 'get_weather' } }
+});
+
+if (response.toolCalls) {
+  for (const toolCall of response.toolCalls) {
+    console.log('Tool:', toolCall.function.name);
+    console.log('Arguments:', toolCall.function.arguments);
+    
+    // Execute the function
+    const result = await getWeather(JSON.parse(toolCall.function.arguments));
+    
+    // Send result back to AI
+    const followUp = await cencori.ai.chat({
+      model: 'gpt-4o',
+      messages: [
+        ...messages,
+        { role: 'assistant', content: '', tool_calls: [toolCall] },
+        { 
+          role: 'tool', 
+          content: JSON.stringify(result),
+          tool_call_id: toolCall.id
+        }
+      ]
+    });
+  }
+}
+```
+
+See `packages/sdk/src/types.ts:43` for `ToolDefinition` and `packages/sdk/src/types.ts:55` for `ToolCall`.
+
+## Structured Output
+
+Generate JSON that matches a schema:
+
+```typescript
+interface UserProfile {
+  name: string;
+  age: number;
+  email: string;
+  interests: string[];
+}
+
+const response = await cencori.ai.generateObject<UserProfile>({
+  model: 'gpt-4o',
+  prompt: 'Generate a sample user profile for a 25-year-old software engineer',
+  schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      age: { type: 'number' },
+      email: { type: 'string', format: 'email' },
+      interests: { type: 'array', items: { type: 'string' } }
+    },
+    required: ['name', 'age', 'email']
+  }
+});
+
+console.log(response.object); // Fully typed as UserProfile
+// { name: "Alex Chen", age: 25, email: "alex@example.com", interests: ["coding", "gaming"] }
+```
+
+See `packages/sdk/src/ai/index.ts:309` for the `generateObject()` implementation.
+
+## Response Format
+
+### ChatResponse Type
+
+```typescript
+interface ChatResponse {
+  id: string;                    // Completion ID
+  model: string;                 // Model used
+  content: string;               // Response text
+  toolCalls?: ToolCall[];        // Tool calls (if any)
+  finishReason?: 'stop' | 'length' | 'tool_calls' | 'content_filter';
+  usage: {
+    promptTokens: number;        // Input tokens
+    completionTokens: number;    // Output tokens
+    totalTokens: number;         // Total tokens
+  };
+}
+```
+
+See `packages/sdk/src/types.ts:85` for the `ChatResponse` definition.
+
+### Usage Tracking
+
+All responses include token usage:
+
+```typescript
+const response = await cencori.ai.chat({ model: 'gpt-4o', messages });
+
+console.log('Input tokens:', response.usage.promptTokens);
+console.log('Output tokens:', response.usage.completionTokens);
+console.log('Total cost:', calculateCost(response.usage.totalTokens));
+```
+
+## Complete Example
+
+Here's a full example with conversation history, error handling, and token tracking:
+
+```typescript
+import { Cencori, CencoriError, ChatMessage } from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+const conversationHistory: ChatMessage[] = [
+  { role: 'system', content: 'You are a helpful assistant.' }
+];
+
+async function chat(userMessage: string) {
+  conversationHistory.push({
+    role: 'user',
+    content: userMessage
+  });
+
+  try {
+    const response = await cencori.ai.chat({
+      model: 'gpt-4o',
+      messages: conversationHistory,
+      temperature: 0.7,
+      maxTokens: 1000
+    });
+
+    conversationHistory.push({
+      role: 'assistant',
+      content: response.content
+    });
+
+    console.log('Assistant:', response.content);
+    console.log('Tokens used:', response.usage.totalTokens);
+
+    return response;
+  } catch (error) {
+    if (error instanceof CencoriError) {
+      console.error('API Error:', error.message, error.statusCode);
+    } else {
+      console.error('Unknown error:', error);
+    }
+    throw error;
+  }
+}
+
+// Usage
+await chat('What is Cencori?');
+await chat('Tell me more about the AI Gateway');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="water" href="/sdks/typescript/streaming">
+    Stream responses token-by-token
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/typescript/memory">
+    Add context retrieval to your chats
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/typescript/error-handling">
+    Handle errors in production
+  </Card>
+  <Card title="Image Generation" icon="image" href="/sdks/typescript/image-generation">
+    Generate images with DALL-E and Imagen
+  </Card>
+</CardGroup>

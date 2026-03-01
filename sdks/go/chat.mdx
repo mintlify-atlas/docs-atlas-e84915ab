@@ -1,0 +1,336 @@
+---
+title: 'Chat API'
+description: 'Use the Cencori Chat API with Go'
+---
+
+## Basic Chat
+
+Create a simple chat completion:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    resp, err := client.Chat.Create(context.Background(), &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Multi-Turn Conversations
+
+Maintain conversation history with multiple messages:
+
+```go
+func chatConversation(client *cencori.Client) {
+    ctx := context.Background()
+    
+    messages := []cencori.Message{
+        {Role: "system", Content: "You are a helpful assistant."},
+        {Role: "user", Content: "What is quantum computing?"},
+    }
+    
+    // First response
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model:    "gpt-4o",
+        Messages: messages,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Add assistant response to history
+    messages = append(messages, cencori.Message{
+        Role:    "assistant",
+        Content: resp.Choices[0].Message.Content,
+    })
+    
+    // Follow-up question
+    messages = append(messages, cencori.Message{
+        Role:    "user",
+        Content: "Can you explain it more simply?",
+    })
+    
+    // Second response with context
+    resp, err = client.Chat.Create(ctx, &cencori.ChatParams{
+        Model:    "gpt-4o",
+        Messages: messages,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## System Messages
+
+Use system messages to set behavior:
+
+```go
+resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+    Model: "gpt-4o",
+    Messages: []cencori.Message{
+        {
+            Role:    "system",
+            Content: "You are a professional copywriter. Write concise, compelling copy.",
+        },
+        {
+            Role:    "user",
+            Content: "Write a tagline for an AI security platform",
+        },
+    },
+})
+```
+
+## Advanced Parameters
+
+### Temperature and Top-P
+
+Control response randomness:
+
+```go
+resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+    Model:       "gpt-4o",
+    Messages:    messages,
+    Temperature: 0.7,  // 0.0 = deterministic, 2.0 = very random
+    TopP:        0.9,  // Nucleus sampling
+})
+```
+
+### Max Tokens
+
+Limit response length:
+
+```go
+resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+    Model:     "gpt-4o",
+    Messages:  messages,
+    MaxTokens: 150,  // Limit to 150 tokens
+})
+```
+
+### Presence and Frequency Penalty
+
+Control repetition:
+
+```go
+resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+    Model:            "gpt-4o",
+    Messages:         messages,
+    PresencePenalty:  0.6,  // Encourage new topics (-2.0 to 2.0)
+    FrequencyPenalty: 0.5,  // Reduce repetition (-2.0 to 2.0)
+})
+```
+
+## Complete Example with All Parameters
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "time"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Create context with timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {
+                Role:    "system",
+                Content: "You are a technical writer specializing in Go.",
+            },
+            {
+                Role:    "user",
+                Content: "Explain Go interfaces in 3 sentences.",
+            },
+        },
+        Temperature:      0.7,
+        MaxTokens:        200,
+        TopP:             0.9,
+        PresencePenalty:  0.0,
+        FrequencyPenalty: 0.0,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Print response details
+    fmt.Printf("Model: %s\n", resp.Model)
+    fmt.Printf("Provider: %s\n", resp.Provider)
+    fmt.Printf("Content: %s\n\n", resp.Choices[0].Message.Content)
+    fmt.Printf("Tokens: %d (prompt: %d, completion: %d)\n",
+        resp.Usage.TotalTokens,
+        resp.Usage.PromptTokens,
+        resp.Usage.CompletionTokens,
+    )
+    fmt.Printf("Cost: $%.6f\n", resp.CostUSD)
+    fmt.Printf("Finish Reason: %s\n", resp.Choices[0].FinishReason)
+}
+```
+
+## Model Selection
+
+Cencori supports multiple AI providers. Change models with a single parameter:
+
+### OpenAI Models
+
+```go
+// GPT-4o (recommended)
+Model: "gpt-4o"
+
+// GPT-4o Mini (faster, cheaper)
+Model: "gpt-4o-mini"
+
+// O3 (advanced reasoning)
+Model: "o3"
+```
+
+### Anthropic Models
+
+```go
+// Claude Opus 4 (most capable)
+Model: "claude-opus-4"
+
+// Claude Sonnet 4 (balanced)
+Model: "claude-sonnet-4"
+
+// Claude 3.5 Sonnet
+Model: "claude-3-5-sonnet"
+```
+
+### Google Models
+
+```go
+// Gemini 2.5 Flash (recommended)
+Model: "gemini-2.5-flash"
+
+// Gemini 2.0 Flash
+Model: "gemini-2.0-flash"
+
+// Gemini 3 Pro
+Model: "gemini-3-pro"
+```
+
+## Function Calling
+
+Use function calling to integrate with your application:
+
+```go
+func getFunctionCalling() {
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "What's the weather in San Francisco?"},
+        },
+        Functions: []cencori.Function{
+            {
+                Name:        "get_weather",
+                Description: "Get the current weather for a location",
+                Parameters: map[string]interface{}{
+                    "type": "object",
+                    "properties": map[string]interface{}{
+                        "location": map[string]string{
+                            "type":        "string",
+                            "description": "City and state, e.g. San Francisco, CA",
+                        },
+                    },
+                    "required": []string{"location"},
+                },
+            },
+        },
+        FunctionCall: "auto",
+    })
+    
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Check if function was called
+    if resp.Choices[0].Message.FunctionCall != nil {
+        fmt.Printf("Function: %s\n", resp.Choices[0].Message.FunctionCall.Name)
+        fmt.Printf("Arguments: %s\n", resp.Choices[0].Message.FunctionCall.Arguments)
+    }
+}
+```
+
+## Response Metadata
+
+Access detailed information about each response:
+
+```go
+resp, err := client.Chat.Create(ctx, params)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Provider information
+fmt.Printf("Provider: %s\n", resp.Provider)
+fmt.Printf("Model: %s\n", resp.Model)
+
+// Token usage
+fmt.Printf("Prompt tokens: %d\n", resp.Usage.PromptTokens)
+fmt.Printf("Completion tokens: %d\n", resp.Usage.CompletionTokens)
+fmt.Printf("Total tokens: %d\n", resp.Usage.TotalTokens)
+
+// Cost tracking (automatic)
+fmt.Printf("Cost: $%.6f\n", resp.CostUSD)
+
+// Finish reason
+fmt.Printf("Finish reason: %s\n", resp.Choices[0].FinishReason)
+// Possible values: "stop", "length", "content_filter", "function_call"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="stream" href="/sdks/go/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/go/memory">
+    Add context with RAG
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/go/error-handling">
+    Handle errors properly
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/sdks/go/quickstart">
+    Back to quickstart
+  </Card>
+</CardGroup>

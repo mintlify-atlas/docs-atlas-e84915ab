@@ -1,0 +1,109 @@
+---
+title: The 5 primitives
+description: The foundational building blocks of every AI application
+---
+
+Cencori provides five foundational primitives that abstract the complexities of building production-grade AI systems. These primitives work together as a unified platform, giving you a single integration point for AI infrastructure.
+
+## Architecture overview
+
+Every AI application requires these building blocks. Cencori provides them as first-class platform services:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Your Application                        │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      CENCORI PLATFORM                       │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ │
+│  │ Gateway │ │ Compute │ │Workflow │ │ Storage │ │  Integ │ │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └────────┘ │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              AI Providers (OpenAI, Anthropic, etc.)         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## The primitives
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="shield-halved" href="/concepts/ai-gateway">
+    Secure, unified API for all AI models with multi-provider routing and built-in security
+  </Card>
+  <Card title="Compute" icon="microchip" href="/concepts/compute">
+    Serverless execution for AI agents and logic with secure sandboxing
+  </Card>
+  <Card title="Workflow" icon="diagram-project" href="/concepts/workflow">
+    Visual orchestration for complex AI pipelines with state management
+  </Card>
+  <Card title="Storage" icon="database" href="/concepts/storage">
+    AI-native storage for vectors, audit logs, and semantic caching
+  </Card>
+  <Card title="Integrations" icon="plug" href="/concepts/integrations">
+    Connect AI to external tools and systems with secure credential management
+  </Card>
+</CardGroup>
+
+## Design principles
+
+Cencori's architecture is built on four core principles:
+
+<CardGroup cols={2}>
+  <Card title="Unified by default" icon="layer-group">
+    A single integration point handles routing, security, and observability
+  </Card>
+  <Card title="Secure by default" icon="lock">
+    Every request is filtered and logged. There is no "insecure" mode
+  </Card>
+  <Card title="Provider agnostic" icon="arrows-rotate">
+    Switch AI providers with a parameter change, not a rewrite
+  </Card>
+  <Card title="Observable always" icon="chart-line">
+    If it happens, it's logged. No black boxes
+  </Card>
+</CardGroup>
+
+## Why primitives matter
+
+Building production AI requires more than just calling an API. You need:
+
+- **Security layers** to prevent prompt injection, PII leakage, and jailbreaks
+- **Multi-provider routing** to avoid vendor lock-in and ensure uptime
+- **Audit logging** for compliance and debugging
+- **Cost tracking** to understand and optimize spending
+- **Orchestration** for multi-step workflows
+- **Storage** for context and embeddings
+- **Integrations** to connect with external systems
+
+Cencori provides all of this out of the box, so you can focus on building your application instead of infrastructure.
+
+<Note>
+  Cencori is a **Cloud Intelligence Provider (CIP)** — the AWS of AI. We abstract the complexities of building production-grade AI systems into a single, unified platform.
+</Note>
+
+## Technology stack
+
+| Layer | Technology | Rationale |
+|-------|------------|-----------|
+| **Web Framework** | Next.js 15 (App Router) | Full-stack React with SSR |
+| **Auth & Database** | Supabase | PostgreSQL + RLS + Auth |
+| **Language** | TypeScript | Type safety across the stack |
+| **Deployment** | Vercel | Global edge network, CI/CD |
+| **SDKs** | TypeScript, Python, Go | First-class multi-language support |
+
+## What's next
+
+Explore each primitive in detail:
+
+<CardGroup cols={2}>
+  <Card title="Start with AI Gateway" icon="arrow-right" href="/concepts/ai-gateway">
+    Learn how to make your first AI request with built-in security
+  </Card>
+  <Card title="View examples" icon="code" href="/examples">
+    See the primitives in action with real-world use cases
+  </Card>
+</CardGroup>

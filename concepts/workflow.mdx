@@ -1,0 +1,447 @@
+---
+title: Workflow
+description: Visual orchestration for complex AI pipelines with state management and human-in-the-loop
+---
+
+<Note>
+  **Status**: Coming soon
+  
+  The Workflow primitive is currently in development. This page describes the planned architecture and capabilities.
+</Note>
+
+Cencori Workflow provides visual orchestration for complex AI pipelines. Chain AI calls, logic steps, and human approvals into reliable, multi-step processes with built-in state management and error recovery.
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Multi-step agents" icon="diagram-project">
+    Chain AI calls, logic steps, and human approvals
+  </Card>
+  <Card title="Circuit breakers" icon="plug-circle-xmark">
+    Prevent cascading failures in autonomous systems
+  </Card>
+  <Card title="State management" icon="database">
+    Persistent state for long-running processes
+  </Card>
+  <Card title="Visual builder" icon="wand-magic-sparkles">
+    No-code interface for building and testing workflows
+  </Card>
+</CardGroup>
+
+## Use cases
+
+### Document processing pipeline
+
+Automate multi-step document analysis:
+
+```typescript
+// Coming soon
+const workflow = await cencori.workflow.create({
+  name: 'document-analysis',
+  steps: [
+    {
+      type: 'ai',
+      model: 'gpt-4o',
+      prompt: 'Extract key entities from this document: {{document}}',
+      outputKey: 'entities'
+    },
+    {
+      type: 'ai',
+      model: 'claude-3-5-sonnet-20241022',
+      prompt: 'Summarize these entities: {{entities}}',
+      outputKey: 'summary'
+    },
+    {
+      type: 'conditional',
+      condition: '{{summary.confidence}} < 0.8',
+      then: 'human-review',
+      else: 'auto-approve'
+    },
+    {
+      id: 'human-review',
+      type: 'approval',
+      assignee: 'user@company.com',
+      timeout: '24h'
+    },
+    {
+      id: 'auto-approve',
+      type: 'webhook',
+      url: 'https://api.example.com/approve',
+      body: { summary: '{{summary}}' }
+    }
+  ]
+});
+
+const run = await cencori.workflow.trigger('document-analysis', {
+  document: 'Contract text...'
+});
+```
+
+### Customer support automation
+
+Route and respond to customer inquiries:
+
+```typescript
+// Coming soon
+const workflow = await cencori.workflow.create({
+  name: 'support-triage',
+  trigger: {
+    type: 'webhook',
+    path: '/support/incoming'
+  },
+  steps: [
+    {
+      type: 'ai',
+      model: 'gpt-4o-mini',
+      prompt: 'Classify this support ticket: {{ticket.content}}\n\nCategories: billing, technical, sales',
+      outputKey: 'category'
+    },
+    {
+      type: 'switch',
+      value: '{{category}}',
+      cases: {
+        'billing': 'billing-flow',
+        'technical': 'technical-flow',
+        'sales': 'sales-flow'
+      }
+    },
+    {
+      id: 'technical-flow',
+      type: 'ai',
+      model: 'claude-3-5-sonnet-20241022',
+      prompt: 'Generate a helpful response for this technical issue: {{ticket.content}}',
+      outputKey: 'response'
+    },
+    {
+      type: 'webhook',
+      url: 'https://api.helpdesk.com/reply',
+      body: { ticketId: '{{ticket.id}}', response: '{{response}}' }
+    }
+  ]
+});
+```
+
+### Content moderation pipeline
+
+Multi-layer content review with escalation:
+
+```typescript
+// Coming soon
+const workflow = await cencori.workflow.create({
+  name: 'content-moderation',
+  steps: [
+    {
+      type: 'security',
+      checks: ['pii', 'harmful_content', 'jailbreak'],
+      inputKey: 'content',
+      outputKey: 'securityResult'
+    },
+    {
+      type: 'conditional',
+      condition: '{{securityResult.riskScore}} > 0.8',
+      then: 'auto-block',
+      else: 'ai-review'
+    },
+    {
+      id: 'ai-review',
+      type: 'ai',
+      model: 'gpt-4o',
+      prompt: 'Review this content for policy violations: {{content}}',
+      outputKey: 'aiDecision'
+    },
+    {
+      type: 'conditional',
+      condition: '{{aiDecision.shouldBlock}}',
+      then: 'human-review',
+      else: 'approve'
+    },
+    {
+      id: 'human-review',
+      type: 'approval',
+      assignee: 'moderator@company.com'
+    }
+  ]
+});
+```
+
+## Step types
+
+### AI step
+
+Call any AI model with dynamic prompts:
+
+```typescript
+{
+  type: 'ai',
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: '{{userPrompt}}' }
+  ],
+  temperature: 0.7,
+  maxTokens: 1000,
+  outputKey: 'aiResponse'
+}
+```
+
+### Compute step
+
+Execute custom code:
+
+```typescript
+{
+  type: 'compute',
+  runtime: 'python',
+  code: `
+import json
+
+data = json.loads(input['data'])
+result = process_data(data)
+
+return {'processed': result}
+  `,
+  outputKey: 'computeResult'
+}
+```
+
+### Approval step
+
+Human-in-the-loop for critical decisions:
+
+```typescript
+{
+  type: 'approval',
+  assignee: 'manager@company.com',
+  message: 'Review this request: {{request}}',
+  timeout: '48h',
+  onTimeout: 'auto-reject'
+}
+```
+
+### Webhook step
+
+Call external APIs:
+
+```typescript
+{
+  type: 'webhook',
+  method: 'POST',
+  url: 'https://api.example.com/notify',
+  headers: {
+    'Authorization': 'Bearer {{secrets.API_KEY}}'
+  },
+  body: {
+    message: '{{notification}}'
+  },
+  outputKey: 'webhookResponse'
+}
+```
+
+### Conditional step
+
+Branch based on conditions:
+
+```typescript
+{
+  type: 'conditional',
+  condition: '{{score}} > 0.8',
+  then: 'high-confidence-flow',
+  else: 'low-confidence-flow'
+}
+```
+
+### Parallel step
+
+Run multiple steps concurrently:
+
+```typescript
+{
+  type: 'parallel',
+  steps: [
+    { type: 'ai', model: 'gpt-4o', prompt: '{{prompt1}}' },
+    { type: 'ai', model: 'claude-3-5-sonnet-20241022', prompt: '{{prompt2}}' },
+    { type: 'webhook', url: 'https://api.example.com/data' }
+  ],
+  outputKey: 'parallelResults'
+}
+```
+
+## State management
+
+Workflows maintain persistent state across steps:
+
+```typescript
+// Access previous step outputs
+{
+  type: 'ai',
+  prompt: 'Summarize this analysis: {{step1.entities}} and {{step2.sentiment}}'
+}
+
+// Update workflow state
+{
+  type: 'compute',
+  code: `
+workflow.state['processedCount'] += 1
+workflow.state['lastProcessed'] = datetime.now()
+  `
+}
+```
+
+## Error handling
+
+### Retry policies
+
+```typescript
+{
+  type: 'ai',
+  model: 'gpt-4o',
+  prompt: '{{prompt}}',
+  retry: {
+    maxAttempts: 3,
+    backoff: 'exponential',
+    retryOn: ['timeout', 'rate_limit']
+  }
+}
+```
+
+### Circuit breakers
+
+Prevent cascading failures in autonomous workflows:
+
+```typescript
+{
+  type: 'ai',
+  model: 'gpt-4o',
+  prompt: '{{prompt}}',
+  circuitBreaker: {
+    failureThreshold: 5,
+    resetTimeout: '60s',
+    onOpen: 'use-fallback'
+  }
+}
+```
+
+### Fallback strategies
+
+```typescript
+{
+  type: 'ai',
+  model: 'gpt-4o',
+  prompt: '{{prompt}}',
+  fallback: {
+    model: 'claude-3-5-sonnet-20241022',
+    prompt: '{{prompt}}'
+  }
+}
+```
+
+## Triggers
+
+### Manual trigger
+
+```typescript
+const run = await cencori.workflow.trigger('workflow-id', {
+  input: 'data'
+});
+```
+
+### Webhook trigger
+
+```typescript
+{
+  trigger: {
+    type: 'webhook',
+    path: '/workflows/data-enrichment',
+    auth: 'api-key'
+  }
+}
+```
+
+### Schedule trigger
+
+```typescript
+{
+  trigger: {
+    type: 'schedule',
+    cron: '0 9 * * 1', // Every Monday at 9 AM
+    timezone: 'America/Los_Angeles'
+  }
+}
+```
+
+### Event trigger
+
+```typescript
+{
+  trigger: {
+    type: 'event',
+    source: 'github',
+    event: 'pull_request.opened'
+  }
+}
+```
+
+## Visual builder
+
+The workflow builder provides a drag-and-drop interface for creating workflows:
+
+- **Node library**: Pre-built nodes for AI, compute, webhooks, approvals
+- **Live testing**: Test workflows with sample data before deploying
+- **Version control**: Track changes and roll back to previous versions
+- **Collaboration**: Share workflows with your team
+
+## Observability
+
+### Execution logs
+
+Every workflow run is logged with:
+
+- Step-by-step execution trace
+- Input/output for each step
+- Execution duration per step
+- Error messages and stack traces
+
+```typescript
+const run = await cencori.workflow.status('run_abc123');
+
+console.log(run.steps);
+// [
+//   { id: 'step1', status: 'completed', duration: 234 },
+//   { id: 'step2', status: 'failed', error: 'Rate limit exceeded' },
+//   { id: 'step3', status: 'skipped' }
+// ]
+```
+
+## Entry point
+
+```
+POST /api/workflow/execute
+```
+
+**Status**: Planned
+
+## SDK reference
+
+Implementation in `packages/sdk/src/workflow/index.ts:14`:
+
+```typescript
+export class WorkflowNamespace {
+  async trigger(workflowId: string, options?: WorkflowTriggerOptions): Promise<never> {
+    throw new Error(
+      `cencori.workflow.trigger() is coming soon! ` +
+      `Join our waitlist at https://cencori.com/workflow`
+    );
+  }
+}
+```
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Join waitlist" icon="envelope" href="https://cencori.com/workflow">
+    Get early access to Cencori Workflow
+  </Card>
+  <Card title="Storage primitive" icon="database" href="/concepts/storage">
+    Learn about AI-native storage for context and embeddings
+  </Card>
+</CardGroup>

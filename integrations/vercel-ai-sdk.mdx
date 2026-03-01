@@ -1,0 +1,234 @@
+---
+title: 'Vercel AI SDK Integration'
+description: 'Use Cencori as a provider in the Vercel AI SDK for Next.js applications'
+---
+
+# Vercel AI SDK Integration
+
+Cencori is a drop-in provider for the Vercel AI SDK (`ai` package), giving you instant access to multiple AI models with built-in security, observability, and cost tracking.
+
+## Installation
+
+<Steps>
+  <Step title="Install the packages">
+    Install both Cencori and the Vercel AI SDK:
+
+    ```bash
+    npm install cencori ai
+    ```
+  </Step>
+
+  <Step title="Set your API key">
+    Add your Cencori API key to your environment variables:
+
+    ```bash .env.local
+    CENCORI_API_KEY=csk_your_secret_key
+    ```
+
+    Get your API key from the [Cencori Dashboard](https://cencori.com/dashboard).
+  </Step>
+
+  <Step title="Import and use">
+    Import the Cencori provider and use it with any Vercel AI SDK function:
+
+    ```typescript
+    import { cencori } from 'cencori/vercel';
+    import { streamText } from 'ai';
+
+    const result = await streamText({
+      model: cencori('gemini-2.5-flash'),
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    ```
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Server-Side Text Generation
+
+Use `streamText()` or `generateText()` for server-side AI generation:
+
+<CodeGroup>
+```typescript streamText()
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = await streamText({
+    model: cencori('gpt-4o'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+```typescript generateText()
+import { cencori } from 'cencori/vercel';
+import { generateText } from 'ai';
+
+export async function POST(req: Request) {
+  const { prompt } = await req.json();
+
+  const { text } = await generateText({
+    model: cencori('claude-3-opus'),
+    prompt,
+  });
+
+  return Response.json({ text });
+}
+```
+</CodeGroup>
+
+### React Hooks (useChat)
+
+Build interactive chat UIs with the `useChat()` hook:
+
+<CodeGroup>
+```typescript app/api/chat/route.ts
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = await streamText({
+    model: cencori('gemini-2.5-flash'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+```tsx app/page.tsx
+'use client';
+
+import { useChat } from 'ai/react';
+
+export default function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat();
+
+  return (
+    <div>
+      {messages.map(m => (
+        <div key={m.id}>
+          {m.role}: {m.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input
+          value={input}
+          onChange={handleInputChange}
+          placeholder="Say something..."
+        />
+      </form>
+    </div>
+  );
+}
+```
+</CodeGroup>
+
+### Generative UI (streamUI)
+
+Generate React components with AI using `streamUI()`:
+
+```typescript app/api/ui/route.ts
+import { cencori } from 'cencori/vercel';
+import { streamUI } from 'ai/rsc';
+
+export async function POST(req: Request) {
+  const { prompt } = await req.json();
+
+  const result = await streamUI({
+    model: cencori('gpt-4o'),
+    prompt,
+    text: ({ content }) => <div>{content}</div>,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## Supported Models
+
+Cencori works with all models available through the AI Gateway:
+
+<CodeGroup>
+```typescript OpenAI
+const result = await streamText({
+  model: cencori('gpt-4o'),
+  // or 'gpt-4o-mini', 'o3', 'o1'
+  messages,
+});
+```
+
+```typescript Anthropic
+const result = await streamText({
+  model: cencori('claude-3-opus'),
+  // or 'claude-3-sonnet', 'claude-3-haiku'
+  messages,
+});
+```
+
+```typescript Google Gemini
+const result = await streamText({
+  model: cencori('gemini-2.5-flash'),
+  // or 'gemini-3-pro', 'gemini-2.0-flash'
+  messages,
+});
+```
+</CodeGroup>
+
+## Custom Configuration
+
+Create a custom Cencori provider instance with your own settings:
+
+```typescript
+import { createCencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const customCencori = createCencori({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseUrl: 'https://cencori.com', // optional
+  headers: {
+    'X-Custom-Header': 'value'
+  }
+});
+
+const result = await streamText({
+  model: customCencori('gpt-4o'),
+  messages,
+});
+```
+
+## Built-in Cencori Features
+
+When using Cencori with the Vercel AI SDK, you automatically get:
+
+- **Security Filtering** — Automatic PII detection and content safety
+- **Cost Tracking** — Real-time cost monitoring in your dashboard
+- **Analytics** — Token usage, latency, and performance metrics
+- **Audit Logs** — Complete history of all AI requests
+- **Multi-Provider** — Switch models without code changes
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Vercel AI SDK Docs" icon="arrow-up-right-from-square" href="https://sdk.vercel.ai/docs">
+    Official Vercel AI SDK documentation
+  </Card>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn more about Cencori's AI Gateway
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your usage and analytics
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full API documentation
+  </Card>
+</CardGroup>

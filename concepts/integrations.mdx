@@ -1,0 +1,451 @@
+---
+title: Integrations
+description: Connect AI to external tools and systems with secure credential management and event triggers
+---
+
+<Note>
+  **Status**: Coming soon
+  
+  The Integrations primitive is currently in development. This page describes the planned architecture and capabilities.
+</Note>
+
+Cencori Integrations connects your AI applications to external tools and systems. Securely manage third-party credentials, trigger workflows from external events, and orchestrate multi-system automation.
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Business connectors" icon="building">
+    Pre-built connectors for Salesforce, Slack, GitHub, databases, and more
+  </Card>
+  <Card title="Credential vault" icon="key">
+    Securely store and inject third-party API keys
+  </Card>
+  <Card title="Event triggers" icon="bolt">
+    Start workflows from external system events
+  </Card>
+  <Card title="OAuth flows" icon="user-shield">
+    Built-in OAuth 2.0 support for user-level integrations
+  </Card>
+</CardGroup>
+
+## Pre-built connectors
+
+### Slack
+
+Send messages, create channels, and respond to events:
+
+```typescript
+// Coming soon
+await cencori.integrations.slack.sendMessage({
+  channel: '#general',
+  text: 'Deployment completed successfully!',
+  blocks: [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Status*: Success' }
+    }
+  ]
+});
+```
+
+### GitHub
+
+Create issues, comment on PRs, and manage repositories:
+
+```typescript
+// Coming soon
+await cencori.integrations.github.createIssue({
+  owner: 'your-org',
+  repo: 'your-repo',
+  title: 'Bug found by AI',
+  body: 'The AI detected a potential bug in the codebase...',
+  labels: ['bug', 'ai-detected']
+});
+```
+
+### Salesforce
+
+Query and update CRM data:
+
+```typescript
+// Coming soon
+const leads = await cencori.integrations.salesforce.query(
+  'SELECT Id, Name, Email FROM Lead WHERE Status = \'New\' LIMIT 10'
+);
+
+for (const lead of leads) {
+  const analysis = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages: [{
+      role: 'user',
+      content: `Analyze this lead and suggest next steps: ${JSON.stringify(lead)}`
+    }]
+  });
+  
+  await cencori.integrations.salesforce.update('Lead', lead.Id, {
+    Description: analysis.content
+  });
+}
+```
+
+### PostgreSQL
+
+Query databases directly from workflows:
+
+```typescript
+// Coming soon
+const users = await cencori.integrations.postgres.query(
+  'SELECT * FROM users WHERE created_at > $1',
+  ['2026-01-01']
+);
+```
+
+### Stripe
+
+Access payment and customer data:
+
+```typescript
+// Coming soon
+const customer = await cencori.integrations.stripe.customers.retrieve(
+  'cus_abc123'
+);
+
+const aiSummary = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{
+    role: 'user',
+    content: `Summarize this customer's payment history: ${JSON.stringify(customer)}`
+  }]
+});
+```
+
+## Credential vault
+
+Securely store and manage third-party API keys and secrets.
+
+### Add credentials
+
+```typescript
+// Coming soon
+await cencori.integrations.credentials.create({
+  name: 'slack-bot-token',
+  type: 'api_key',
+  value: 'xoxb-your-slack-token',
+  description: 'Slack bot for #engineering channel'
+});
+```
+
+### Use credentials
+
+Credentials are automatically injected when using connectors:
+
+```typescript
+// Coming soon
+// Automatically uses stored credential
+await cencori.integrations.slack.sendMessage({
+  channel: '#engineering',
+  text: 'Hello from Cencori!'
+});
+```
+
+### OAuth flows
+
+For user-level integrations, Cencori handles the OAuth flow:
+
+```typescript
+// Coming soon
+const authUrl = await cencori.integrations.github.authorize({
+  scopes: ['repo', 'user'],
+  redirectUri: 'https://yourapp.com/callback'
+});
+
+// Redirect user to authUrl
+// After user authorizes, GitHub redirects to your callback URL
+
+// Exchange code for token
+const token = await cencori.integrations.github.exchangeCode(code);
+```
+
+## Event triggers
+
+Start workflows automatically when external events occur.
+
+### GitHub webhook
+
+Trigger a workflow when a PR is opened:
+
+```typescript
+// Coming soon
+await cencori.integrations.github.webhook.create({
+  events: ['pull_request.opened'],
+  workflow: 'code-review-workflow',
+  filter: {
+    repository: 'your-org/your-repo'
+  }
+});
+```
+
+When a PR is opened, Cencori automatically:
+1. Receives the webhook from GitHub
+2. Validates the signature
+3. Triggers the specified workflow
+4. Passes the PR data as input
+
+### Slack events
+
+Respond to Slack messages:
+
+```typescript
+// Coming soon
+await cencori.integrations.slack.event.create({
+  type: 'message',
+  channel: '#support',
+  workflow: 'support-triage',
+  filter: {
+    // Only trigger for messages containing "urgent"
+    messageContains: 'urgent'
+  }
+});
+```
+
+### Database changes
+
+Trigger workflows when database rows change:
+
+```typescript
+// Coming soon
+await cencori.integrations.postgres.trigger.create({
+  table: 'orders',
+  operation: 'INSERT',
+  workflow: 'order-processing',
+  filter: {
+    status: 'pending'
+  }
+});
+```
+
+## Custom connectors
+
+Build custom connectors for internal or third-party APIs.
+
+### Define a connector
+
+```typescript
+// Coming soon
+await cencori.integrations.custom.create({
+  name: 'internal-api',
+  baseUrl: 'https://api.internal.com',
+  auth: {
+    type: 'bearer',
+    credentialKey: 'internal-api-token'
+  },
+  methods: [
+    {
+      name: 'getUser',
+      method: 'GET',
+      path: '/users/{userId}',
+      params: ['userId']
+    },
+    {
+      name: 'updateUser',
+      method: 'PUT',
+      path: '/users/{userId}',
+      params: ['userId', 'data']
+    }
+  ]
+});
+```
+
+### Use custom connector
+
+```typescript
+// Coming soon
+const user = await cencori.integrations.custom('internal-api').getUser('123');
+
+await cencori.integrations.custom('internal-api').updateUser('123', {
+  status: 'active'
+});
+```
+
+## Webhook management
+
+Cencori includes built-in webhook support for triggering external systems.
+
+### Trigger webhook
+
+Implemented in `lib/webhooks.ts` (already available):
+
+```typescript
+await triggerSecurityWebhook({
+  projectId: 'proj_abc123',
+  incidentType: 'pii_input',
+  severity: 'high',
+  details: {
+    message: 'PII detected in input',
+    patterns: ['email', 'phone']
+  }
+});
+```
+
+### Webhook logs
+
+Webhook deliveries are tracked in the `webhooks_table` (`database/migrations/webhooks_table.sql`):
+
+```sql
+CREATE TABLE webhooks (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  url TEXT NOT NULL,
+  method TEXT DEFAULT 'POST',
+  headers JSONB,
+  payload JSONB,
+  response_status INTEGER,
+  response_body TEXT,
+  delivered_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+## Integration marketplace
+
+Browse and install pre-built integrations:
+
+```typescript
+// Coming soon
+const integrations = await cencori.integrations.marketplace.list({
+  category: 'crm',
+  verified: true
+});
+
+for (const integration of integrations) {
+  console.log(integration.name, integration.description);
+}
+
+// Install an integration
+await cencori.integrations.marketplace.install('salesforce');
+```
+
+## Security
+
+### Credential encryption
+
+All credentials are encrypted at rest using AES-256:
+
+```typescript
+import { decryptApiKey } from '@/lib/encryption';
+
+const decryptedKey = decryptApiKey(encryptedKey);
+```
+
+Implementation in `lib/encryption.ts`.
+
+### Row-level security
+
+Credentials are protected with Supabase Row Level Security (RLS):
+
+```sql
+CREATE POLICY "Users can only access their own credentials"
+ON credentials
+FOR SELECT
+USING (
+  project_id IN (
+    SELECT p.id FROM projects p
+    WHERE p.organization_id IN (
+      SELECT organization_id FROM organization_members
+      WHERE user_id = auth.uid()
+    )
+  )
+);
+```
+
+### Webhook verification
+
+Webhooks are verified using HMAC signatures:
+
+```typescript
+import crypto from 'crypto';
+
+const signature = crypto
+  .createHmac('sha256', webhookSecret)
+  .update(JSON.stringify(payload))
+  .digest('hex');
+
+if (signature !== receivedSignature) {
+  throw new Error('Invalid webhook signature');
+}
+```
+
+## Rate limiting
+
+Integrations respect third-party API rate limits:
+
+```typescript
+// Coming soon
+await cencori.integrations.slack.sendMessage({
+  channel: '#general',
+  text: 'Hello!',
+  rateLimit: {
+    maxRetries: 3,
+    backoff: 'exponential'
+  }
+});
+```
+
+## Entry point
+
+```
+POST /api/integrations/{connector}
+```
+
+**Status**: Planned
+
+## Available connectors
+
+<CardGroup cols={3}>
+  <Card title="Slack" icon="slack">
+    Messaging and collaboration
+  </Card>
+  <Card title="GitHub" icon="github">
+    Code hosting and version control
+  </Card>
+  <Card title="Salesforce" icon="cloud">
+    Customer relationship management
+  </Card>
+  <Card title="Stripe" icon="stripe">
+    Payments and billing
+  </Card>
+  <Card title="PostgreSQL" icon="database">
+    Relational database
+  </Card>
+  <Card title="MongoDB" icon="leaf">
+    NoSQL database
+  </Card>
+  <Card title="SendGrid" icon="envelope">
+    Email delivery
+  </Card>
+  <Card title="Twilio" icon="phone">
+    SMS and voice
+  </Card>
+  <Card title="Google Sheets" icon="table">
+    Spreadsheet data
+  </Card>
+  <Card title="Notion" icon="book">
+    Documentation and notes
+  </Card>
+  <Card title="Airtable" icon="table-cells">
+    Spreadsheet database
+  </Card>
+  <Card title="Zapier" icon="bolt">
+    No-code automation
+  </Card>
+</CardGroup>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Join waitlist" icon="envelope" href="https://cencori.com/integrations">
+    Get early access to Cencori Integrations
+  </Card>
+  <Card title="View all primitives" icon="layer-group" href="/concepts/five-primitives">
+    Learn about the other primitives
+  </Card>
+</CardGroup>

@@ -1,0 +1,372 @@
+---
+title: 'Memory Search'
+description: 'Semantic search across your vector memory stores'
+---
+
+## Endpoint
+
+```
+GET /api/projects/{projectId}/memory/search
+```
+
+Perform semantic search across memories in a namespace. Returns most similar memories based on vector similarity.
+
+## Authentication
+
+Requires dashboard authentication (user session), not API key authentication.
+
+## Query Parameters
+
+<ParamField query="namespace" type="string" required>
+  Name of the namespace to search
+</ParamField>
+
+<ParamField query="query" type="string" required>
+  Search query text
+</ParamField>
+
+<ParamField query="limit" type="number">
+  Number of results to return
+  
+  Default: `20`
+  
+  Max: `50`
+</ParamField>
+
+## Response
+
+<ResponseField name="results" type="array">
+  Array of matching memories, sorted by similarity
+  
+  <Expandable title="Memory Result">
+    <ResponseField name="id" type="string">
+      Memory identifier
+    </ResponseField>
+    <ResponseField name="content" type="string">
+      Memory content
+    </ResponseField>
+    <ResponseField name="metadata" type="object">
+      Custom metadata
+    </ResponseField>
+    <ResponseField name="similarity" type="number">
+      Cosine similarity score (0-1)
+      
+      Higher = more similar
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+### Basic Search
+
+```bash
+curl "https://api.cencori.com/api/projects/proj_123/memory/search?namespace=docs&query=authentication" \
+  -H "Cookie: session=..."
+```
+
+```json
+{
+  "results": [
+    {
+      "id": "mem_abc123",
+      "content": "Authentication is handled via API keys or OAuth tokens...",
+      "metadata": {
+        "title": "Authentication Guide",
+        "url": "https://docs.example.com/auth"
+      },
+      "similarity": 0.91
+    },
+    {
+      "id": "mem_def456",
+      "content": "To authenticate requests, include your API key in the Authorization header...",
+      "metadata": {
+        "title": "API Reference",
+        "section": "authentication"
+      },
+      "similarity": 0.87
+    }
+  ]
+}
+```
+
+### With Limit
+
+```bash
+curl "https://api.cencori.com/api/projects/proj_123/memory/search?namespace=faq&query=reset+password&limit=5" \
+  -H "Cookie: session=..."
+```
+
+### Using TypeScript
+
+```typescript
+const projectId = 'proj_123';
+
+async function searchMemories(
+  namespace: string,
+  query: string,
+  limit: number = 20
+) {
+  const params = new URLSearchParams({ namespace, query, limit: limit.toString() });
+  
+  const response = await fetch(
+    `https://api.cencori.com/api/projects/${projectId}/memory/search?${params}`,
+    {
+      headers: {
+        'Cookie': `session=${sessionToken}`
+      }
+    }
+  );
+  
+  return await response.json();
+}
+
+const results = await searchMemories('docs', 'how to deploy');
+console.log(`Found ${results.results.length} results`);
+
+for (const result of results.results) {
+  console.log(`[${result.similarity.toFixed(2)}] ${result.content.substring(0, 100)}...`);
+}
+```
+
+## Use Cases
+
+### Documentation Search
+
+```typescript
+// Build search UI
+const searchDocs = async (query: string) => {
+  const results = await searchMemories('documentation', query, 10);
+  
+  return results.results.map(r => ({
+    title: r.metadata.title,
+    excerpt: r.content.substring(0, 200),
+    url: r.metadata.url,
+    relevance: r.similarity
+  }));
+};
+
+const matches = await searchDocs('API authentication');
+```
+
+### Chatbot Context Retrieval
+
+```typescript
+const getChatbotContext = async (userMessage: string) => {
+  // Search for relevant knowledge
+  const results = await searchMemories('support-kb', userMessage, 5);
+  
+  // Filter by similarity threshold
+  const relevant = results.results.filter(r => r.similarity > 0.7);
+  
+  if (relevant.length === 0) {
+    return null; // No relevant context found
+  }
+  
+  // Combine into context string
+  return relevant.map(r => r.content).join('\n\n');
+};
+
+// Use in chatbot
+const context = await getChatbotContext(userMessage);
+if (context) {
+  // Include context in prompt
+  const response = await generateResponse(userMessage, context);
+}
+```
+
+### Similar Article Finder
+
+```typescript
+const findSimilarArticles = async (articleId: string) => {
+  // Get current article
+  const article = await getArticle(articleId);
+  
+  // Search for similar ones
+  const similar = await searchMemories('articles', article.content, 5);
+  
+  // Exclude current article
+  return similar.results.filter(r => r.metadata.article_id !== articleId);
+};
+```
+
+### FAQ Matching
+
+```typescript
+const findMatchingFAQ = async (question: string) => {
+  const results = await searchMemories('faq', question, 3);
+  
+  // Return top match if similarity is high enough
+  const topMatch = results.results[0];
+  if (topMatch && topMatch.similarity > 0.85) {
+    return {
+      question: topMatch.metadata.question,
+      answer: topMatch.content,
+      confidence: topMatch.similarity
+    };
+  }
+  
+  return null; // No confident match
+};
+```
+
+### Product Search
+
+```typescript
+const searchProducts = async (query: string) => {
+  const results = await searchMemories('products', query, 20);
+  
+  // Group by category
+  const byCategory: Record<string, any[]> = {};
+  
+  for (const result of results.results) {
+    const category = result.metadata.category || 'Other';
+    if (!byCategory[category]) byCategory[category] = [];
+    byCategory[category].push(result);
+  }
+  
+  return byCategory;
+};
+```
+
+## Similarity Scores
+
+Memory search uses cosine similarity:
+
+| Score | Interpretation | Action |
+|-------|----------------|--------|
+| 0.9 - 1.0 | Very similar | Highly relevant |
+| 0.8 - 0.9 | Similar | Relevant |
+| 0.7 - 0.8 | Somewhat similar | May be relevant |
+| 0.5 - 0.7 | Loosely related | Consider context |
+| < 0.5 | Not similar | Likely not relevant |
+
+Recommended thresholds:
+- **Strict matching:** > 0.85
+- **General search:** > 0.7
+- **Exploratory:** > 0.5
+
+## Best Practices
+
+1. **Filter by similarity**
+   ```typescript
+   const highQuality = results.results.filter(r => r.similarity > 0.75);
+   ```
+
+2. **Handle no results**
+   ```typescript
+   if (results.results.length === 0) {
+     return { message: 'No relevant information found' };
+   }
+   ```
+
+3. **Use metadata for filtering**
+   ```typescript
+   const recentDocs = results.results.filter(r => {
+     const date = new Date(r.metadata.last_updated);
+     return date > oneYearAgo;
+   });
+   ```
+
+4. **Combine with keyword search**
+   ```typescript
+   // Hybrid search: semantic + keyword
+   const semanticResults = await searchMemories('docs', query);
+   const keywordResults = await keywordSearch(query);
+   
+   // Merge and deduplicate
+   const combined = mergeResults(semanticResults, keywordResults);
+   ```
+
+5. **Cache frequent searches**
+   ```typescript
+   const cache = new Map();
+   
+   async function cachedSearch(query: string) {
+     if (cache.has(query)) return cache.get(query);
+     
+     const results = await searchMemories('docs', query);
+     cache.set(query, results);
+     
+     return results;
+   }
+   ```
+
+## Comparison with RAG
+
+| Feature | Memory Search | RAG Endpoint |
+|---------|---------------|-------------|
+| **Purpose** | Find similar memories | Generate AI responses |
+| **Output** | Array of memories | Generated text |
+| **Use case** | Search UI, manual review | Chatbots, Q&A |
+| **Cost** | Embedding + search | Embedding + search + LLM |
+| **Control** | Full control | Automatic |
+
+### When to use Memory Search
+
+- Building search interfaces
+- Manual content review
+- Custom ranking logic
+- Multi-step workflows
+- Need raw results
+
+### When to use RAG
+
+- Chatbots and assistants
+- Automated Q&A
+- Simple implementation
+- Want generated responses
+- Need context injection
+
+## Limitations
+
+- Maximum 50 results per request
+- Search query limited to ~2000 characters
+- Results sorted by similarity only (no custom ranking)
+- No filtering by metadata (filter client-side)
+
+## Error Responses
+
+### Missing Parameters
+
+```json
+{
+  "error": "namespace and query params required"
+}
+```
+
+HTTP Status: `400`
+
+### Namespace Not Found
+
+```json
+{
+  "error": "Namespace not found"
+}
+```
+
+HTTP Status: `404`
+
+### Insufficient Credits
+
+```json
+{
+  "error": "INSUFFICIENT_CREDITS",
+  "message": "Unable to charge credits for this request."
+}
+```
+
+HTTP Status: `402`
+
+## Pricing
+
+Search costs:
+
+- **Query embedding:** $0.02 per 1M tokens (OpenAI)
+- **Vector search:** Included
+
+Example:
+- Single search (10 words): ~$0.000001
+- 1000 searches: ~$0.001
+
+Very cost-effective for high-volume search.

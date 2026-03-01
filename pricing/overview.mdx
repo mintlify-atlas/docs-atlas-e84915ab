@@ -1,0 +1,135 @@
+---
+title: Pricing Overview
+description: Understand Cencori's transparent, prepaid credits pricing model
+---
+
+Cencori uses a **prepaid credits system** with transparent markup on provider costs. You only pay for what you use, with no monthly fees or hidden charges.
+
+## Pricing Model
+
+Cencori's pricing is built on three principles:
+
+1. **Prepaid Credits** - Load credits into your account before use
+2. **Transparent Markup** - See exact provider cost + Cencori markup
+3. **Pay-as-you-go** - No monthly subscriptions or commitments
+
+<Info>
+  Credits are denominated in USD. 1 credit = $1.00 USD
+</Info>
+
+## Pricing Tiers
+
+### Free Tier
+
+- **Cost**: Free
+- **Providers**: Google Gemini only
+- **Markup**: 0% markup on Gemini API costs
+- **Use Case**: Testing and development with Gemini models
+
+### Paid Tier
+
+- **Cost**: Prepaid credits (starting from $10)
+- **Providers**: OpenAI, Anthropic, Google, xAI, Mistral, DeepSeek, and custom providers
+- **Markup**: Variable by provider (see Cost Calculation)
+- **Use Case**: Production workloads with multi-provider access
+
+## How Credits Work
+
+Credits are deducted from your organization's balance for each AI request:
+
+1. **Load Credits** - Purchase credits via the dashboard
+2. **Make Requests** - Credits deducted automatically per request
+3. **Track Usage** - Monitor spending in real-time
+4. **Low Balance Alerts** - Get notified when credits run low
+
+<Tip>
+  Set up budget alerts to prevent unexpected costs. See [Cost Tracking](/pricing/cost-tracking) for details.
+</Tip>
+
+## Cost Calculation
+
+Each request cost is calculated as:
+
+```
+Provider Base Cost = (Input Tokens × Input Price) + (Output Tokens × Output Price)
+Cencori Markup = Provider Base Cost × Markup Percentage
+Total Cost = Provider Base Cost + Cencori Markup
+```
+
+### Markup by Provider
+
+| Provider | Markup Percentage |
+|----------|------------------|
+| **Google Gemini** | 0% (Free tier) |
+| **OpenAI** | 50% |
+| **Anthropic** | 50% |
+| **Custom Providers** | 0% |
+
+<Info>
+  Pricing is stored per model and automatically updated. You can view exact costs for each model in your dashboard.
+</Info>
+
+## Example Cost Calculation
+
+For a GPT-4o request with:
+- 1,000 input tokens
+- 500 output tokens
+- Input price: $0.0015 per 1K tokens
+- Output price: $0.002 per 1K tokens
+- Markup: 50%
+
+**Calculation:**
+```
+Base Cost = (1,000 × 0.0015/1000) + (500 × 0.002/1000)
+          = $0.0015 + $0.001
+          = $0.0025
+
+Markup = $0.0025 × 0.50 = $0.00125
+Total = $0.0025 + $0.00125 = $0.00375
+```
+
+You'll be charged **$0.00375** (0.00375 credits) for this request.
+
+## Credits Transactions
+
+All credit activity is tracked with full audit history:
+
+- **Topup** - Credits added to account
+- **Usage** - Credits deducted for AI requests
+- **Refund** - Credits returned for failed requests
+- **Adjustment** - Manual credit adjustments
+
+Each transaction includes:
+- Amount
+- Transaction type
+- Description
+- Balance before/after
+- Timestamp
+
+## Getting Started
+
+<Steps>
+  <Step title="Create an Account">
+    Sign up at [cencori.com](https://cencori.com)
+  </Step>
+  
+  <Step title="Load Credits">
+    Purchase credits in the dashboard (minimum $10)
+  </Step>
+  
+  <Step title="Start Building">
+    Use your API key to make requests - credits are deducted automatically
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Credits System" icon="coins" href="/pricing/credits-system">
+    Learn how credits are managed and tracked
+  </Card>
+  
+  <Card title="Cost Tracking" icon="chart-line" href="/pricing/cost-tracking">
+    Monitor spending with budgets and alerts
+  </Card>
+</CardGroup>

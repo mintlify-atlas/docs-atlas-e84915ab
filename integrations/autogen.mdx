@@ -1,0 +1,364 @@
+---
+title: 'AutoGen Integration'
+description: 'Use Cencori with Microsoft AutoGen for conversational AI agents'
+---
+
+# AutoGen Integration
+
+Cencori works with Microsoft AutoGen by configuring the `base_url` in your LLM config. This gives you full observability and cost tracking for all your AutoGen agent conversations.
+
+## How It Works
+
+AutoGen's LLM configuration accepts a `base_url` parameter. Point it to Cencori's gateway to route all agent interactions through Cencori with automatic logging and analytics.
+
+## Setup
+
+<Steps>
+  <Step title="Install AutoGen">
+    Install the AutoGen Python package:
+
+    ```bash
+    pip install pyautogen
+    ```
+  </Step>
+
+  <Step title="Add provider keys to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    - Go to **Settings** > **Providers**
+    - Add your OpenAI or Anthropic API keys
+    - Cencori routes requests using your provider keys
+  </Step>
+
+  <Step title="Configure AutoGen LLM config">
+    Set `base_url` in your LLM configuration:
+
+    ```python
+    llm_config = {
+        "config_list": [{
+            "model": "gpt-4o",
+            "api_key": "csk_your_cencori_key",
+            "base_url": "https://api.cencori.com/v1"
+        }]
+    }
+    ```
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Basic Two-Agent Conversation
+
+```python
+import autogen
+
+# LLM configuration with Cencori
+llm_config = {
+    "config_list": [{
+        "model": "gpt-4o",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+
+# Create assistant agent
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+    system_message="You are a helpful AI assistant."
+)
+
+# Create user proxy agent
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+    code_execution_config={"work_dir": "coding"},
+)
+
+# Start conversation
+user_proxy.initiate_chat(
+    assistant,
+    message="Write a Python function to calculate fibonacci numbers"
+)
+```
+
+### Multi-Agent Group Chat
+
+Create a group chat with multiple specialized agents:
+
+```python
+import autogen
+
+llm_config = {
+    "config_list": [{
+        "model": "gpt-4o",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+
+# Create specialized agents
+researcher = autogen.AssistantAgent(
+    name="researcher",
+    llm_config=llm_config,
+    system_message="You are a research expert. Research topics thoroughly."
+)
+
+coder = autogen.AssistantAgent(
+    name="coder",
+    llm_config=llm_config,
+    system_message="You are a coding expert. Write clean, efficient code."
+)
+
+reviewer = autogen.AssistantAgent(
+    name="reviewer",
+    llm_config=llm_config,
+    system_message="You are a code reviewer. Review code for quality and bugs."
+)
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    code_execution_config={"work_dir": "coding"},
+)
+
+# Create group chat
+groupchat = autogen.GroupChat(
+    agents=[user_proxy, researcher, coder, reviewer],
+    messages=[],
+    max_round=12
+)
+
+manager = autogen.GroupChatManager(
+    groupchat=groupchat,
+    llm_config=llm_config
+)
+
+# Start group conversation
+user_proxy.initiate_chat(
+    manager,
+    message="Create a REST API for a todo app with tests"
+)
+```
+
+### Using Different Models
+
+Use different models for different agents:
+
+```python
+import autogen
+
+# GPT-4o for complex reasoning
+researcher_config = {
+    "config_list": [{
+        "model": "gpt-4o",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+
+# Claude for creative writing
+writer_config = {
+    "config_list": [{
+        "model": "claude-3-opus",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+
+researcher = autogen.AssistantAgent(
+    name="researcher",
+    llm_config=researcher_config,
+    system_message="Research expert"
+)
+
+writer = autogen.AssistantAgent(
+    name="writer",
+    llm_config=writer_config,
+    system_message="Creative writer"
+)
+```
+
+### Async Agent Conversations
+
+Run agent conversations asynchronously:
+
+```python
+import autogen
+import asyncio
+
+llm_config = {
+    "config_list": [{
+        "model": "gpt-4o",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config=llm_config
+)
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER"
+)
+
+async def main():
+    await user_proxy.a_initiate_chat(
+        assistant,
+        message="Explain quantum computing"
+    )
+
+asyncio.run(main())
+```
+
+### Function Calling with AutoGen
+
+Use function calling for tool use:
+
+```python
+import autogen
+from typing import Literal
+
+llm_config = {
+    "config_list": [{
+        "model": "gpt-4o",
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }],
+    "functions": [
+        {
+            "name": "get_weather",
+            "description": "Get weather for a location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    ]
+}
+
+def get_weather(location: str) -> str:
+    return f"The weather in {location} is sunny, 72°F"
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config=llm_config
+)
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    function_map={"get_weather": get_weather}
+)
+
+user_proxy.initiate_chat(
+    assistant,
+    message="What's the weather in Paris?"
+)
+```
+
+## Configuration from JSON
+
+Store your config in a JSON file:
+
+```json OAI_CONFIG_LIST.json
+[
+  {
+    "model": "gpt-4o",
+    "api_key": "csk_your_cencori_key",
+    "base_url": "https://api.cencori.com/v1"
+  },
+  {
+    "model": "claude-3-opus",
+    "api_key": "csk_your_cencori_key",
+    "base_url": "https://api.cencori.com/v1"
+  }
+]
+```
+
+```python
+import autogen
+
+llm_config = {
+    "config_list": autogen.config_list_from_json(
+        "OAI_CONFIG_LIST.json"
+    )
+}
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config=llm_config
+)
+```
+
+## Supported Models
+
+<CodeGroup>
+```python OpenAI
+llm_config = {
+    "config_list": [{
+        "model": "gpt-4o",  # or gpt-4o-mini, o3, o1
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+```
+
+```python Anthropic
+llm_config = {
+    "config_list": [{
+        "model": "claude-3-opus",  # or claude-3-sonnet
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+```
+
+```python Google Gemini
+llm_config = {
+    "config_list": [{
+        "model": "gemini-2.5-flash",  # or gemini-3-pro
+        "api_key": "csk_your_cencori_key",
+        "base_url": "https://api.cencori.com/v1"
+    }]
+}
+```
+</CodeGroup>
+
+## What You Get
+
+By routing AutoGen through Cencori:
+
+- **Agent Observability** — Track all agent-to-agent conversations
+- **Cost Attribution** — See costs per agent and per conversation
+- **Security** — Automatic content filtering and PII detection
+- **Audit Logs** — Complete history of multi-agent interactions
+- **Multi-Provider** — Use different models for different agents
+- **Performance Metrics** — Latency and token usage analytics
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AutoGen Docs" icon="arrow-up-right-from-square" href="https://microsoft.github.io/autogen/">
+    Official AutoGen documentation
+  </Card>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about Cencori's AI Gateway
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your AutoGen metrics
+  </Card>
+  <Card title="Provider Setup" icon="key" href="/integrations/openai">
+    Configure provider API keys
+  </Card>
+</CardGroup>

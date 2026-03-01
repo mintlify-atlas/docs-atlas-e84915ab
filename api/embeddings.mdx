@@ -1,0 +1,395 @@
+---
+title: 'Embeddings'
+description: 'POST /api/ai/embeddings - Generate vector embeddings'
+---
+
+## Endpoint
+
+```
+POST https://api.cencori.com/api/ai/embeddings
+```
+
+Generate vector embeddings for text using OpenAI, Google, or Cohere models. Perfect for semantic search, RAG, clustering, and similarity tasks.
+
+## Authentication
+
+Requires API key in `Authorization` header or `CENCORI_API_KEY` header.
+
+## Request Body
+
+<ParamField body="input" type="string | string[]" required>
+  Text or array of texts to embed. Maximum 2048 tokens per text.
+</ParamField>
+
+<ParamField body="model" type="string">
+  Embedding model to use.
+  
+  Default: `text-embedding-3-small`
+  
+  Available models:
+  - `text-embedding-3-large` (OpenAI, 3072 dimensions)
+  - `text-embedding-3-small` (OpenAI, 1536 dimensions)  
+  - `text-embedding-ada-002` (OpenAI, 1536 dimensions)
+  - `text-embedding-004` (Google, 768 dimensions)
+  - `embed-english-v3.0` (Cohere, 1024 dimensions)
+  - `embed-multilingual-v3.0` (Cohere, 1024 dimensions)
+</ParamField>
+
+<ParamField body="dimensions" type="number">
+  Number of dimensions for the embedding. Only supported by some models.
+  
+  For OpenAI models, can reduce dimensions while maintaining quality.
+</ParamField>
+
+<ParamField body="encodingFormat" type="string">
+  Format for the embedding: `float` or `base64`
+  
+  Default: `float`
+</ParamField>
+
+## Response
+
+<ResponseField name="object" type="string">
+  Always `list`
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of embedding objects
+  
+  <Expandable title="Embedding Object">
+    <ResponseField name="object" type="string">
+      Always `embedding`
+    </ResponseField>
+    <ResponseField name="embedding" type="number[]">
+      Vector embedding (array of floats)
+    </ResponseField>
+    <ResponseField name="index" type="number">
+      Index of the input text
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model used for generation
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Token usage
+  
+  <Expandable title="Usage">
+    <ResponseField name="prompt_tokens" type="number">
+      Tokens in input
+    </ResponseField>
+    <ResponseField name="total_tokens" type="number">
+      Total tokens processed
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+### Single Text Embedding
+
+```bash
+curl https://api.cencori.com/api/ai/embeddings \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "The quick brown fox jumps over the lazy dog",
+    "model": "text-embedding-3-small"
+  }'
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "embedding": [
+        -0.006929283,
+        -0.005336422,
+        0.024047505,
+        // ... 1533 more dimensions
+      ],
+      "index": 0
+    }
+  ],
+  "model": "text-embedding-3-small",
+  "usage": {
+    "prompt_tokens": 9,
+    "total_tokens": 9
+  }
+}
+```
+
+### Batch Embeddings
+
+```bash
+curl https://api.cencori.com/api/ai/embeddings \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      "First document about machine learning",
+      "Second document about artificial intelligence",
+      "Third document about neural networks"
+    ],
+    "model": "text-embedding-3-small"
+  }'
+```
+
+### Using OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+
+const response = await client.embeddings.create({
+  model: 'text-embedding-3-small',
+  input: 'Your text here'
+});
+
+const embedding = response.data[0].embedding;
+console.log('Embedding dimensions:', embedding.length);
+```
+
+### With Dimensions Parameter
+
+```typescript
+const response = await client.embeddings.create({
+  model: 'text-embedding-3-large',
+  input: 'Your text here',
+  dimensions: 1024  // Reduce from 3072 to 1024
+});
+```
+
+### Using Google Model
+
+```bash
+curl https://api.cencori.com/api/ai/embeddings \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Text to embed",
+    "model": "text-embedding-004"
+  }'
+```
+
+### Using Cohere Model
+
+```bash
+curl https://api.cencori.com/api/ai/embeddings \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Multilingual text to embed",
+    "model": "embed-multilingual-v3.0"
+  }'
+```
+
+## Model Comparison
+
+| Model | Provider | Dimensions | Cost per 1M tokens | Best For |
+|-------|----------|------------|-------------------|----------|
+| `text-embedding-3-large` | OpenAI | 3072 | $0.13 | Highest quality |
+| `text-embedding-3-small` | OpenAI | 1536 | $0.02 | Balance |
+| `text-embedding-ada-002` | OpenAI | 1536 | $0.10 | Legacy |
+| `text-embedding-004` | Google | 768 | $0.00 | Free |
+| `embed-english-v3.0` | Cohere | 1024 | $0.10 | English |
+| `embed-multilingual-v3.0` | Cohere | 1024 | $0.10 | Multi-language |
+
+## Use Cases
+
+### Semantic Search
+
+```typescript
+// 1. Embed documents
+const docs = ['Doc 1', 'Doc 2', 'Doc 3'];
+const docEmbeddings = await Promise.all(
+  docs.map(doc => 
+    client.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: doc
+    })
+  )
+);
+
+// 2. Embed query
+const queryEmbedding = await client.embeddings.create({
+  model: 'text-embedding-3-small',
+  input: 'search query'
+});
+
+// 3. Calculate similarity
+function cosineSimilarity(a: number[], b: number[]) {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magnitudeA * magnitudeB);
+}
+
+const similarities = docEmbeddings.map(doc => 
+  cosineSimilarity(
+    queryEmbedding.data[0].embedding,
+    doc.data[0].embedding
+  )
+);
+```
+
+### RAG (Retrieval-Augmented Generation)
+
+Combine embeddings with chat for RAG:
+
+```typescript
+// 1. Embed and store documents
+const docEmbedding = await client.embeddings.create({
+  input: 'Knowledge base document',
+  model: 'text-embedding-3-small'
+});
+// Store in vector database (Pinecone, Weaviate, etc.)
+
+// 2. Search for relevant docs
+const queryEmbedding = await client.embeddings.create({
+  input: 'User question',
+  model: 'text-embedding-3-small'
+});
+// Find similar documents
+
+// 3. Generate answer with context
+const completion = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [
+    {role: 'system', content: 'Use the following context:\n' + relevantDocs},
+    {role: 'user', content: 'User question'}
+  ]
+});
+```
+
+Or use the built-in [RAG endpoint](/api/rag) which handles this automatically.
+
+### Clustering
+
+```typescript
+import { kmeans } from 'ml-kmeans';
+
+// Embed documents
+const embeddings = await client.embeddings.create({
+  input: documents,
+  model: 'text-embedding-3-small'
+});
+
+const vectors = embeddings.data.map(e => e.embedding);
+
+// Cluster into 5 groups
+const result = kmeans(vectors, 5);
+console.log('Cluster assignments:', result.clusters);
+```
+
+## Best Practices
+
+1. **Choose the right model**
+   - Use `text-embedding-3-small` for most cases (best value)
+   - Use `text-embedding-3-large` for maximum quality
+   - Use Google model for free tier
+
+2. **Batch requests** 
+   - Embed multiple texts in one request (up to 2048 per batch)
+   - Reduces API calls and improves performance
+
+3. **Cache embeddings**
+   - Store embeddings in a vector database
+   - Don't re-embed the same text
+
+4. **Normalize text**
+   - Clean and normalize text before embedding
+   - Remove excess whitespace and formatting
+
+5. **Use consistent models**
+   - Use the same model for queries and documents
+   - Don't mix embeddings from different models
+
+6. **Consider dimensions**
+   - Higher dimensions = better quality but more storage
+   - Use `dimensions` parameter to reduce size
+
+## Error Responses
+
+### Provider Not Configured
+
+```json
+{
+  "error": "provider_not_configured",
+  "message": "No API key configured for openai"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Add provider API key in project settings.
+
+### Invalid Input
+
+```json
+{
+  "error": "bad_request",
+  "message": "Input is required"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Provide valid input text.
+
+## Rate Limits
+
+Embeddings count toward your monthly request quota:
+
+- Free: 1,000 requests/month
+- Pro: 50,000 requests/month
+- Enterprise: Custom limits
+
+Each batch request counts as one request, regardless of array size.
+
+## Pricing
+
+Pricing is based on tokens processed:
+
+| Model | Provider Cost | Cencori Charge |
+|-------|--------------|----------------|
+| text-embedding-3-small | $0.020 / 1M tokens | $0.024 / 1M tokens |
+| text-embedding-3-large | $0.130 / 1M tokens | $0.156 / 1M tokens |
+| text-embedding-004 | Free | 20% markup |
+
+**Token estimation:** ~1 token per 4 characters
+
+## List Available Models
+
+```bash
+curl https://api.cencori.com/api/ai/embeddings \
+  -H "Authorization: Bearer $CENCORI_API_KEY"
+```
+
+```json
+{
+  "models": [
+    {
+      "id": "text-embedding-3-large",
+      "provider": "openai",
+      "dimensions": 3072,
+      "description": "Best quality"
+    },
+    {
+      "id": "text-embedding-3-small",
+      "provider": "openai",
+      "dimensions": 1536,
+      "description": "Fast and efficient"
+    }
+    // ...
+  ]
+}
+```

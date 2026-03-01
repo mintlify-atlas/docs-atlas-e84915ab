@@ -1,0 +1,426 @@
+---
+title: "Memory & RAG"
+description: "Build context-aware AI applications with embeddings, vector storage, and retrieval-augmented generation (RAG) using the Python SDK."
+---
+
+## Overview
+
+Cencori's Python SDK provides tools for building memory-aware AI applications through embeddings and vector storage. This enables semantic search, knowledge retrieval, and context-aware responses.
+
+<Info>
+The Storage module for vector database and RAG is coming soon. For now, you can use embeddings with your own vector database.
+</Info>
+
+## Embeddings
+
+Generate vector embeddings to represent text semantically:
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_...")
+
+response = cencori.ai.embeddings(
+    input="Cencori is an AI infrastructure platform",
+    model="text-embedding-3-small"
+)
+
+embedding = response.embeddings[0]
+print(f"Embedding dimension: {len(embedding)}")  # 1536
+print(f"First few values: {embedding[:5]}")
+```
+
+## Batch Embeddings
+
+Embed multiple texts efficiently:
+
+```python
+texts = [
+    "Python is a programming language",
+    "JavaScript is used for web development",
+    "Machine learning is a subset of AI",
+    "Databases store structured data"
+]
+
+response = cencori.ai.embeddings(
+    input=texts,
+    model="text-embedding-3-small"
+)
+
+print(f"Generated {len(response.embeddings)} embeddings")
+print(f"Total tokens: {response.usage.total_tokens}")
+
+# Access individual embeddings
+for i, embedding in enumerate(response.embeddings):
+    print(f"Text {i+1}: {len(embedding)} dimensions")
+```
+
+## Semantic Search
+
+Find similar documents using cosine similarity:
+
+```python
+import numpy as np
+from numpy.linalg import norm
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (norm(a) * norm(b))
+
+# Knowledge base
+documents = [
+    "Cencori provides AI infrastructure for production",
+    "The Python SDK supports chat, embeddings, and streaming",
+    "Rate limiting helps prevent API abuse",
+    "Vector embeddings enable semantic search"
+]
+
+# Generate embeddings for all documents
+doc_response = cencori.ai.embeddings(input=documents)
+doc_embeddings = doc_response.embeddings
+
+# User query
+query = "How do I use the SDK?"
+query_response = cencori.ai.embeddings(input=query)
+query_embedding = query_response.embeddings[0]
+
+# Find most similar document
+similarities = [
+    cosine_similarity(query_embedding, doc_emb)
+    for doc_emb in doc_embeddings
+]
+
+best_idx = np.argmax(similarities)
+print(f"Most relevant: {documents[best_idx]}")
+print(f"Similarity: {similarities[best_idx]:.4f}")
+```
+
+## RAG (Retrieval-Augmented Generation)
+
+Combine semantic search with chat for context-aware responses:
+
+```python
+def rag_query(cencori, query, documents, top_k=2):
+    # 1. Embed query and documents
+    query_emb = cencori.ai.embeddings(input=query).embeddings[0]
+    doc_embs = cencori.ai.embeddings(input=documents).embeddings
+    
+    # 2. Find most similar documents
+    similarities = [
+        cosine_similarity(query_emb, doc_emb)
+        for doc_emb in doc_embs
+    ]
+    
+    # 3. Get top K documents
+    top_indices = np.argsort(similarities)[-top_k:][::-1]
+    context = "\n\n".join([documents[i] for i in top_indices])
+    
+    # 4. Generate response with context
+    response = cencori.ai.chat(
+        messages=[
+            {
+                "role": "system",
+                "content": f"Use this context to answer:\n\n{context}"
+            },
+            {"role": "user", "content": query}
+        ],
+        model="gpt-4o"
+    )
+    
+    return response.content
+
+# Usage
+knowledge_base = [
+    "Cencori SDK supports Python 3.8+",
+    "Install with: pip install cencori",
+    "Authentication requires a CENCORI_API_KEY",
+    "Streaming is available via chat_stream() method"
+]
+
+answer = rag_query(cencori, "How do I install Cencori?", knowledge_base)
+print(answer)
+```
+
+## Document Chunking
+
+Split large documents into chunks for better retrieval:
+
+```python
+def chunk_text(text, chunk_size=500, overlap=50):
+    """Split text into overlapping chunks."""
+    words = text.split()
+    chunks = []
+    
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append(chunk)
+    
+    return chunks
+
+# Example
+long_document = """[Your long document here...]"""
+
+chunks = chunk_text(long_document, chunk_size=200)
+print(f"Created {len(chunks)} chunks")
+
+# Embed chunks
+chunk_embeddings = cencori.ai.embeddings(input=chunks).embeddings
+```
+
+## Conversation Memory
+
+Implement conversation memory with context window management:
+
+```python
+class ConversationMemory:
+    def __init__(self, cencori, max_tokens=4000):
+        self.cencori = cencori
+        self.messages = []
+        self.max_tokens = max_tokens
+    
+    def add_message(self, role, content):
+        self.messages.append({"role": role, "content": content})
+        self._trim_history()
+    
+    def _trim_history(self):
+        """Keep only recent messages within token limit."""
+        # Simple approximation: 4 chars ≈ 1 token
+        total_chars = sum(len(m["content"]) for m in self.messages)
+        
+        while total_chars > self.max_tokens * 4 and len(self.messages) > 1:
+            removed = self.messages.pop(0)
+            total_chars -= len(removed["content"])
+    
+    def chat(self, user_message, **kwargs):
+        self.add_message("user", user_message)
+        
+        response = self.cencori.ai.chat(
+            messages=self.messages,
+            **kwargs
+        )
+        
+        self.add_message("assistant", response.content)
+        return response
+
+# Usage
+memory = ConversationMemory(cencori, max_tokens=2000)
+
+response1 = memory.chat("My name is Alice")
+print(response1.content)
+
+response2 = memory.chat("What's my name?")  # Remembers context
+print(response2.content)
+```
+
+## Semantic Cache
+
+Cache similar queries to reduce API calls:
+
+```python
+import hashlib
+import json
+
+class SemanticCache:
+    def __init__(self, cencori, similarity_threshold=0.95):
+        self.cencori = cencori
+        self.cache = {}  # {embedding: response}
+        self.threshold = similarity_threshold
+    
+    def _get_cache_key(self, query):
+        embedding = self.cencori.ai.embeddings(input=query).embeddings[0]
+        
+        # Check for similar cached queries
+        for cached_emb, cached_response in self.cache.items():
+            similarity = cosine_similarity(embedding, cached_emb)
+            if similarity > self.threshold:
+                return cached_emb, cached_response
+        
+        return tuple(embedding), None
+    
+    def get_or_create(self, query, **kwargs):
+        cache_key, cached = self._get_cache_key(query)
+        
+        if cached:
+            print("[Cache hit]")
+            return cached
+        
+        print("[Cache miss]")
+        response = self.cencori.ai.chat(
+            messages=[{"role": "user", "content": query}],
+            **kwargs
+        )
+        
+        self.cache[cache_key] = response.content
+        return response.content
+
+# Usage
+cache = SemanticCache(cencori)
+
+answer1 = cache.get_or_create("What is Python?")  # Cache miss
+answer2 = cache.get_or_create("Tell me about Python")  # Cache hit (similar query)
+```
+
+## Vector Database Integration
+
+Integrate with popular vector databases:
+
+### Pinecone Example
+
+```python
+import pinecone
+
+# Initialize Pinecone
+pinecone.init(api_key="your-pinecone-key", environment="us-west1-gcp")
+index = pinecone.Index("cencori-docs")
+
+# Store embeddings
+texts = ["Document 1", "Document 2", "Document 3"]
+embeddings = cencori.ai.embeddings(input=texts).embeddings
+
+vectors = [
+    (f"doc_{i}", emb, {"text": text})
+    for i, (emb, text) in enumerate(zip(embeddings, texts))
+]
+
+index.upsert(vectors)
+
+# Query
+query = "Find relevant documents"
+query_emb = cencori.ai.embeddings(input=query).embeddings[0]
+
+results = index.query(query_emb, top_k=3, include_metadata=True)
+
+for match in results.matches:
+    print(f"Score: {match.score:.4f} - {match.metadata['text']}")
+```
+
+### ChromaDB Example
+
+```python
+import chromadb
+
+# Initialize ChromaDB
+client = chromadb.Client()
+collection = client.create_collection("cencori_knowledge")
+
+# Add documents
+texts = ["Document 1", "Document 2", "Document 3"]
+embeddings = cencori.ai.embeddings(input=texts).embeddings
+
+collection.add(
+    embeddings=embeddings,
+    documents=texts,
+    ids=[f"doc_{i}" for i in range(len(texts))]
+)
+
+# Query
+query = "Find information"
+query_emb = cencori.ai.embeddings(input=query).embeddings[0]
+
+results = collection.query(
+    query_embeddings=[query_emb],
+    n_results=3
+)
+
+print(results['documents'])
+```
+
+## Async Embeddings
+
+Generate embeddings asynchronously for better performance:
+
+```python
+import asyncio
+
+async def generate_embeddings_async(texts):
+    cencori = Cencori(api_key="csk_...")
+    
+    # Process in batches
+    batch_size = 100
+    all_embeddings = []
+    
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        response = await cencori.ai.async_embeddings(input=batch)
+        all_embeddings.extend(response.embeddings)
+    
+    return all_embeddings
+
+# Usage
+texts = [f"Document {i}" for i in range(500)]
+embeddings = asyncio.run(generate_embeddings_async(texts))
+print(f"Generated {len(embeddings)} embeddings")
+```
+
+## Storage Module (Coming Soon)
+
+The Storage module will provide built-in vector database and RAG:
+
+```python
+# 🚧 Coming Soon
+cencori = Cencori(api_key="csk_...")
+
+# Vector search (planned API)
+cencori.storage.vectors.upsert(
+    vectors=[...],
+    metadata=[...]
+)
+
+results = cencori.storage.vectors.search(
+    query="Find similar documents",
+    top_k=5
+)
+```
+
+## Best Practices
+
+### Embedding Model Selection
+
+```python
+# Small, fast, cost-effective (1536 dimensions)
+model = "text-embedding-3-small"
+
+# Larger, more accurate (3072 dimensions)  
+model = "text-embedding-3-large"
+```
+
+### Batch Processing
+
+Process embeddings in batches to reduce API calls:
+
+```python
+def batch_embed(texts, batch_size=100):
+    all_embeddings = []
+    
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        response = cencori.ai.embeddings(input=batch)
+        all_embeddings.extend(response.embeddings)
+    
+    return all_embeddings
+```
+
+### Context Window Management
+
+Stay within model context limits:
+
+```python
+MAX_CONTEXT_TOKENS = 8000  # GPT-4 limit
+
+def truncate_context(context, max_tokens):
+    # Rough approximation: 4 chars ≈ 1 token
+    max_chars = max_tokens * 4
+    if len(context) > max_chars:
+        return context[:max_chars] + "..."
+    return context
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/python/chat">
+    Learn about chat completions
+  </Card>
+  <Card title="Streaming" icon="bolt" href="/sdks/python/streaming">
+    Stream responses in real-time
+  </Card>
+</CardGroup>

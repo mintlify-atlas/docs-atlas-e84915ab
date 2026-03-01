@@ -1,0 +1,400 @@
+---
+title: Using Multiple AI Providers
+description: Switch between OpenAI, Anthropic, Gemini, and other providers with automatic fallback
+---
+
+# Using Multiple AI Providers
+
+Cencori's unified API lets you switch between AI providers seamlessly. The platform automatically handles authentication, rate limiting, and failover.
+
+## Supported Providers
+
+Cencori supports these AI providers:
+
+- **OpenAI** - GPT-4, GPT-4o, GPT-3.5
+- **Anthropic** - Claude 3 Opus, Sonnet, Haiku
+- **Google** - Gemini 2.5, Gemini 2.0 Flash
+- **Mistral** - Mistral Large, Medium, Small
+- **Groq** - Llama 3, Mixtral
+- **Cohere** - Command R, Command R+
+- **xAI** - Grok models
+- **DeepSeek** - DeepSeek models
+- **Perplexity** - Sonar models
+
+## Provider Detection
+
+Cencori automatically detects the provider from the model name:
+
+```typescript lib/providers/router.ts
+detectProvider(modelName: string): string {
+  // OpenAI models
+  if (modelName.startsWith('gpt-') || modelName.startsWith('o1-')) {
+    return 'openai';
+  }
+
+  // Anthropic models
+  if (modelName.startsWith('claude-')) {
+    return 'anthropic';
+  }
+
+  // Google models
+  if (modelName.startsWith('gemini-')) {
+    return 'google';
+  }
+
+  // Explicit provider prefix: "provider/model"
+  if (modelName.includes('/')) {
+    const [provider] = modelName.split('/');
+    return provider;
+  }
+
+  return 'openai'; // Default
+}
+```
+
+## Switching Providers
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Cencori } from '@cencori/sdk';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+const messages = [
+  { role: 'user', content: 'Explain quantum computing' }
+];
+
+// Use OpenAI
+const openaiResponse = await cencori.ai.chat({
+  messages,
+  model: 'gpt-4o'
+});
+
+// Use Anthropic
+const claudeResponse = await cencori.ai.chat({
+  messages,
+  model: 'claude-3-5-sonnet-20241022'
+});
+
+// Use Google Gemini
+const geminiResponse = await cencori.ai.chat({
+  messages,
+  model: 'gemini-2.5-flash'
+});
+
+console.log('OpenAI:', openaiResponse.content);
+console.log('Claude:', claudeResponse.content);
+console.log('Gemini:', geminiResponse.content);
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="your-api-key")
+
+messages = [{"role": "user", "content": "Explain quantum computing"}]
+
+# Use OpenAI
+openai_response = cencori.ai.chat(
+    messages=messages,
+    model="gpt-4o"
+)
+
+# Use Anthropic
+claude_response = cencori.ai.chat(
+    messages=messages,
+    model="claude-3-5-sonnet-20241022"
+)
+
+# Use Google Gemini
+gemini_response = cencori.ai.chat(
+    messages=messages,
+    model="gemini-2.5-flash"
+)
+
+print(f"OpenAI: {openai_response.content}")
+print(f"Claude: {claude_response.content}")
+print(f"Gemini: {gemini_response.content}")
+```
+
+</CodeGroup>
+
+## Provider Router
+
+The router manages provider instances and routes requests:
+
+```typescript lib/providers/router.ts
+export class ProviderRouter {
+  private providers: Map<string, AIProvider> = new Map();
+
+  registerProvider(name: string, provider: AIProvider): void {
+    this.providers.set(name, provider);
+  }
+
+  getProvider(providerName: string): AIProvider {
+    const provider = this.providers.get(providerName);
+    if (!provider) {
+      throw new ProviderError(
+        providerName,
+        `Provider '${providerName}' is not registered`
+      );
+    }
+    return provider;
+  }
+
+  getProviderForModel(modelName: string): AIProvider {
+    const providerName = this.detectProvider(modelName);
+    return this.getProvider(providerName);
+  }
+}
+```
+
+## Bring Your Own Key (BYOK)
+
+Cencori supports using your own API keys for any provider:
+
+<Steps>
+
+1. **Add Provider Key**
+   
+   Go to your project settings and add your API key:
+   ```typescript
+   // Cencori automatically detects and uses your key
+   const { data: providerKey } = await supabase
+     .from('provider_keys')
+     .select('encrypted_key, default_model')
+     .eq('project_id', projectId)
+     .eq('provider', 'openai')
+     .single();
+   ```
+
+2. **Initialize Provider**
+   
+   The router initializes your provider with your key:
+   ```typescript
+   if (providerKey && providerKey.is_active) {
+     const apiKey = decryptApiKey(
+       providerKey.encrypted_key,
+       organizationId
+     );
+     
+     if (targetProvider === 'openai') {
+       router.registerProvider(
+         targetProvider,
+         new OpenAIProvider(apiKey)
+       );
+     }
+   }
+   ```
+
+3. **Use Your Provider**
+   
+   Make requests as normal - your key is used automatically:
+   ```typescript
+   const response = await cencori.ai.chat({
+     messages,
+     model: 'gpt-4o'
+   });
+   ```
+
+</Steps>
+
+## Automatic Failover
+
+Cencori automatically falls back to alternative providers when the primary fails:
+
+```typescript app/api/ai/chat/route.ts
+// Try primary provider
+for (let attempt = 0; attempt < maxRetries; attempt++) {
+  try {
+    response = await provider.chat(chatRequest);
+    await recordSuccess(providerName);
+    break;
+  } catch (error) {
+    if (isNonRetryableError(error)) throw error;
+    await recordFailure(providerName);
+  }
+}
+
+// Fallback to alternative providers
+if (!response && enableFallback) {
+  const fallbackChain = getFallbackChain(
+    providerName,
+    configuredFallbackProvider
+  );
+
+  for (const fallbackProviderName of fallbackChain) {
+    if (await isCircuitOpen(fallbackProviderName)) continue;
+
+    try {
+      const fallbackProvider = router.getProvider(fallbackProviderName);
+      const fallbackModel = getFallbackModel(
+        normalizedModel,
+        fallbackProviderName
+      );
+
+      response = await fallbackProvider.chat({
+        ...chatRequest,
+        model: fallbackModel
+      });
+
+      actualProvider = fallbackProviderName;
+      usedFallback = true;
+      break;
+    } catch (error) {
+      console.warn(`Fallback ${fallbackProviderName} failed`);
+    }
+  }
+}
+```
+
+## Provider-Specific Features
+
+### OpenAI Provider
+
+```typescript lib/providers/openai.ts
+export class OpenAIProvider extends AIProvider {
+  async chat(request: UnifiedChatRequest): Promise<UnifiedChatResponse> {
+    const completion = await this.client.chat.completions.create({
+      model: request.model,
+      messages: toOpenAIMessages(request.messages),
+      temperature: request.temperature ?? 0.7,
+      max_tokens: request.maxTokens,
+      tools: request.tools,
+      tool_choice: request.toolChoice
+    });
+
+    return {
+      content: completion.choices[0].message.content,
+      model: completion.model,
+      provider: 'openai',
+      usage: {
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens
+      }
+    };
+  }
+}
+```
+
+### Anthropic Provider
+
+```typescript lib/providers/anthropic.ts
+export class AnthropicProvider extends AIProvider {
+  async chat(request: UnifiedChatRequest): Promise<UnifiedChatResponse> {
+    const { system, messages } = toAnthropicMessages(request.messages);
+
+    const response = await this.client.messages.create({
+      model: request.model,
+      max_tokens: request.maxTokens ?? 4096,
+      temperature: request.temperature,
+      system,
+      messages
+    });
+
+    return {
+      content: response.content[0].text,
+      model: response.model,
+      provider: 'anthropic',
+      usage: {
+        promptTokens: response.usage.input_tokens,
+        completionTokens: response.usage.output_tokens,
+        totalTokens: response.usage.input_tokens + response.usage.output_tokens
+      }
+    };
+  }
+}
+```
+
+### Gemini Provider
+
+```typescript lib/providers/gemini.ts
+export class GeminiProvider extends AIProvider {
+  async chat(request: UnifiedChatRequest): Promise<UnifiedChatResponse> {
+    const model = this.client.getGenerativeModel({ model: request.model });
+    const { history, prompt } = toGeminiMessages(request.messages);
+
+    const chat = model.startChat({
+      history,
+      generationConfig: {
+        temperature: request.temperature ?? 0.7,
+        maxOutputTokens: request.maxTokens ?? 2048
+      }
+    });
+
+    const result = await chat.sendMessage(prompt);
+    const text = result.response.text();
+
+    return {
+      content: text,
+      model: request.model,
+      provider: 'google',
+      usage: {
+        promptTokens: await model.countTokens(prompt),
+        completionTokens: await model.countTokens(text)
+      }
+    };
+  }
+}
+```
+
+## Model Selection Strategy
+
+<Tabs>
+  <Tab title="Cost-Optimized">
+    Use the cheapest models for each task:
+    
+    ```typescript
+    const modelByTask = {
+      simple: 'gemini-2.0-flash',      // $0.00025/1K tokens
+      moderate: 'gpt-3.5-turbo',       // $0.001/1K tokens
+      complex: 'claude-3-5-sonnet',    // $0.003/1K tokens
+      premium: 'gpt-4o'                // $0.005/1K tokens
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Speed-Optimized">
+    Use the fastest models:
+    
+    ```typescript
+    const fastestModels = [
+      'gemini-2.0-flash',      // Fastest
+      'gpt-3.5-turbo',         // Fast
+      'claude-3-haiku'         // Fast
+    ];
+    ```
+  </Tab>
+  
+  <Tab title="Quality-Optimized">
+    Use the best models for accuracy:
+    
+    ```typescript
+    const bestModels = [
+      'gpt-4o',                // Best reasoning
+      'claude-3-5-opus',       // Best for long-form
+      'gemini-2.5-pro'         // Best for multimodal
+    ];
+    ```
+  </Tab>
+</Tabs>
+
+## Provider Comparison
+
+| Provider | Strengths | Best For |
+|----------|-----------|----------|
+| OpenAI | Function calling, tool use | Structured outputs, agents |
+| Anthropic | Long context, safety | Document analysis, content moderation |
+| Google | Speed, multimodal | Real-time apps, image analysis |
+| Mistral | Cost-effective | European deployments |
+| Groq | Ultra-fast inference | High-throughput applications |
+
+## Next Steps
+
+- [Rate Limiting](/guides/rate-limiting) - Manage provider rate limits
+- [Cost Optimization](/guides/cost-optimization) - Choose the right provider
+- [Error Handling](/guides/error-handling) - Handle provider errors

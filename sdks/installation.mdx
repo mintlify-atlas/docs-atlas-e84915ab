@@ -1,0 +1,387 @@
+---
+title: Installation Guide
+description: Install and configure Cencori SDKs for TypeScript, Python, Go, and more
+---
+
+# Installation Guide
+
+This guide covers installation and initial setup for all Cencori SDKs.
+
+## TypeScript/JavaScript
+
+The Cencori TypeScript SDK supports Node.js 18+, Deno, Bun, and modern browsers.
+
+### Package Manager
+
+<CodeGroup>
+```bash npm
+npm install cencori
+```
+
+```bash yarn
+yarn add cencori
+```
+
+```bash pnpm
+pnpm add cencori
+```
+
+```bash bun
+bun add cencori
+```
+</CodeGroup>
+
+### Vercel AI SDK Integration
+
+If you're using Vercel AI SDK, install it alongside Cencori:
+
+```bash
+npm install cencori ai @ai-sdk/provider
+```
+
+### Import Styles
+
+The SDK supports multiple import patterns:
+
+<Tabs>
+  <Tab title="Unified SDK (Recommended)">
+    ```typescript
+    import { Cencori } from 'cencori';
+    
+    const cencori = new Cencori({ apiKey: 'csk_...' });
+    
+    // AI Gateway
+    await cencori.ai.chat({ model: 'gpt-4o', messages });
+    
+    // Memory
+    await cencori.memory.search({ namespace: 'docs', query: '...' });
+    ```
+  </Tab>
+  
+  <Tab title="Vercel AI SDK">
+    ```typescript
+    import { cencori } from 'cencori/vercel';
+    import { streamText } from 'ai';
+    
+    const result = await streamText({
+      model: cencori('gpt-4o'),
+      messages
+    });
+    ```
+  </Tab>
+  
+  <Tab title="TanStack AI">
+    ```typescript
+    import { cencori } from 'cencori/tanstack';
+    
+    // Use with TanStack AI
+    ```
+  </Tab>
+  
+  <Tab title="Subpath Exports">
+    ```typescript
+    // Import specific modules
+    import { AINamespace } from 'cencori/ai';
+    import { MemoryClient } from 'cencori';
+    import { TelemetryClient } from 'cencori/telemetry';
+    ```
+  </Tab>
+</Tabs>
+
+### TypeScript Configuration
+
+The SDK includes full TypeScript definitions. Ensure your `tsconfig.json` supports ESM:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "types": ["node"]
+  }
+}
+```
+
+## Python
+
+The Cencori Python SDK supports Python 3.8+.
+
+### pip
+
+```bash
+pip install cencori
+```
+
+### Poetry
+
+```bash
+poetry add cencori
+```
+
+### Import
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_...")
+
+# AI Gateway
+response = await cencori.ai.chat(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+## Go
+
+The Cencori Go SDK supports Go 1.21+.
+
+### Install
+
+```bash
+go get github.com/cencori/cencori-go
+```
+
+### Import
+
+```go
+import "github.com/cencori/cencori-go"
+
+client := cencori.New("csk_...")
+
+response, err := client.AI.Chat(ctx, cencori.ChatRequest{
+    Model: "gpt-4o",
+    Messages: []cencori.Message{
+        {Role: "user", Content: "Hello!"},
+    },
+})
+```
+
+## Environment Setup
+
+### API Key
+
+All SDKs support the `CENCORI_API_KEY` environment variable:
+
+<CodeGroup>
+```bash Unix/macOS
+export CENCORI_API_KEY=csk_...
+```
+
+```powershell Windows (PowerShell)
+$env:CENCORI_API_KEY = "csk_..."
+```
+
+```bash Windows (CMD)
+set CENCORI_API_KEY=csk_...
+```
+
+```bash .env file
+CENCORI_API_KEY=csk_...
+```
+</CodeGroup>
+
+### Get Your API Key
+
+<Steps>
+  <Step title="Sign up">
+    Create a free account at [cencori.com](https://cencori.com)
+  </Step>
+  
+  <Step title="Create a project">
+    Navigate to the dashboard and create a new project
+  </Step>
+  
+  <Step title="Generate API key">
+    Go to **Settings → API Keys** and click **Create API Key**
+  </Step>
+  
+  <Step title="Copy and save">
+    Copy your key (starts with `csk_`) and store it securely
+  </Step>
+</Steps>
+
+<Warning>
+Never commit API keys to version control. Use environment variables or secret management services.
+</Warning>
+
+## Configuration Options
+
+### TypeScript
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  // Required: API key
+  apiKey: process.env.CENCORI_API_KEY,
+  
+  // Optional: Custom base URL
+  baseUrl: 'https://cencori.com',
+  
+  // Optional: Custom headers
+  headers: {
+    'X-Custom-Header': 'value'
+  }
+});
+```
+
+### Python
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(
+    api_key=os.getenv("CENCORI_API_KEY"),
+    base_url="https://cencori.com",  # optional
+    headers={"X-Custom-Header": "value"}  # optional
+)
+```
+
+### Go
+
+```go
+import "github.com/cencori/cencori-go"
+
+client := cencori.New(
+    os.Getenv("CENCORI_API_KEY"),
+    cencori.WithBaseURL("https://cencori.com"),
+    cencori.WithHeader("X-Custom-Header", "value"),
+)
+```
+
+## Verification
+
+Test your installation:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Cencori } from 'cencori';
+    
+    const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+    
+    const response = await cencori.ai.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    
+    console.log(response.content);
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from cencori import Cencori
+    import os
+    
+    cencori = Cencori(api_key=os.getenv("CENCORI_API_KEY"))
+    
+    response = await cencori.ai.chat(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    
+    print(response.content)
+    ```
+  </Tab>
+  
+  <Tab title="Go">
+    ```go
+    package main
+    
+    import (
+        "context"
+        "fmt"
+        "os"
+        "github.com/cencori/cencori-go"
+    )
+    
+    func main() {
+        client := cencori.New(os.Getenv("CENCORI_API_KEY"))
+        
+        response, err := client.AI.Chat(context.Background(), cencori.ChatRequest{
+            Model: "gpt-4o",
+            Messages: []cencori.Message{
+                {Role: "user", Content: "Hello!"},
+            },
+        })
+        
+        if err != nil {
+            panic(err)
+        }
+        
+        fmt.Println(response.Content)
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+### Module Not Found
+
+<AccordionGroup>
+  <Accordion title="TypeScript: Cannot find module 'cencori'">
+    1. Verify installation: `npm list cencori`
+    2. Clear cache: `rm -rf node_modules package-lock.json && npm install`
+    3. Check `node_modules/cencori/package.json` exists
+  </Accordion>
+  
+  <Accordion title="Python: No module named 'cencori'">
+    1. Verify installation: `pip list | grep cencori`
+    2. Check Python environment: `which python`
+    3. Reinstall: `pip uninstall cencori && pip install cencori`
+  </Accordion>
+  
+  <Accordion title="Go: package cencori-go is not in GOROOT">
+    1. Verify installation: `go list -m github.com/cencori/cencori-go`
+    2. Run: `go mod tidy`
+    3. Update: `go get -u github.com/cencori/cencori-go`
+  </Accordion>
+</AccordionGroup>
+
+### Authentication Errors
+
+<AccordionGroup>
+  <Accordion title="Invalid API key">
+    - Verify your API key starts with `csk_`
+    - Check the environment variable is set: `echo $CENCORI_API_KEY`
+    - Regenerate key in the dashboard if needed
+  </Accordion>
+  
+  <Accordion title="CENCORI_API_KEY not found">
+    - Ensure environment variable is exported in current shell
+    - For `.env` files, use a library like `dotenv` to load it
+    - Or pass API key directly in constructor
+  </Accordion>
+</AccordionGroup>
+
+### Type Errors
+
+<AccordionGroup>
+  <Accordion title="TypeScript type errors">
+    1. Ensure TypeScript is installed: `npm install -D typescript`
+    2. Update to latest SDK: `npm update cencori`
+    3. Check `tsconfig.json` has `"moduleResolution": "bundler"` or `"node16"`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TypeScript Quickstart" icon="rocket" href="/sdks/typescript/quickstart">
+    Build your first AI application
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key security
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/typescript/error-handling">
+    Handle errors gracefully
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    See complete working examples
+  </Card>
+</CardGroup>

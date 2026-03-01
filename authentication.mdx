@@ -1,0 +1,267 @@
+---
+title: Authentication
+description: Learn how to authenticate with the Cencori API using API keys
+---
+
+# Authentication
+
+All requests to the Cencori API require authentication using API keys. Cencori provides different types of API keys for different use cases.
+
+## API key types
+
+Cencori uses two main types of API keys:
+
+<CardGroup cols={2}>
+  <Card title="Secret keys" icon="lock">
+    Server-side only keys with full access to your account
+  </Card>
+  <Card title="Publishable keys" icon="globe">
+    Browser-safe keys with domain whitelisting
+  </Card>
+</CardGroup>
+
+### Secret keys
+
+Secret keys have full access to your Cencori account and should only be used on the server.
+
+| Prefix | Environment | Use case |
+|--------|-------------|----------|
+| `csk_` | Production | Production server-side applications |
+| `csk_test_` | Test | Development and testing |
+
+<Warning>
+  Never expose secret keys in client-side code, version control, or public repositories.
+</Warning>
+
+### Publishable keys
+
+Publishable keys are safe to use in browsers and mobile apps. They require domain whitelisting for security.
+
+| Prefix | Environment | Use case |
+|--------|-------------|----------|
+| `cpk_` | Production | Production client-side applications |
+| `cpk_test_` | Test | Development client-side testing |
+
+### Legacy keys
+
+Keys with the `cen_` prefix are legacy keys that are treated as secret keys.
+
+## Getting your API key
+
+<Steps>
+  <Step title="Sign up">
+    Create an account at [cencori.com](https://cencori.com)
+  </Step>
+  <Step title="Create a project">
+    Navigate to your dashboard and create a new project
+  </Step>
+  <Step title="Generate an API key">
+    Go to the API Keys section and click **Create API Key**
+  </Step>
+  <Step title="Copy your key">
+    Copy the key and store it securely. You won't be able to see it again.
+  </Step>
+</Steps>
+
+## Using API keys
+
+### SDK authentication
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Cencori } from 'cencori';
+
+    const cencori = new Cencori({
+      apiKey: 'csk_your_secret_key'
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from cencori import Cencori
+
+    cencori = Cencori(api_key="csk_your_secret_key")
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    import "github.com/cencori/cencori-go"
+
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Environment variables
+
+Store your API key in environment variables for better security:
+
+```bash
+export CENCORI_API_KEY=csk_your_secret_key
+```
+
+Then reference it in your code:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const cencori = new Cencori({
+      apiKey: process.env.CENCORI_API_KEY
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os
+
+    cencori = Cencori(api_key=os.getenv("CENCORI_API_KEY"))
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### REST API authentication
+
+Include your API key in the request headers:
+
+```bash
+curl https://api.cencori.com/v1/ai/chat \
+  -H "CENCORI_API_KEY: csk_your_secret_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+Alternatively, use the `Authorization` header with Bearer token:
+
+```bash
+curl https://api.cencori.com/v1/ai/chat \
+  -H "Authorization: Bearer csk_your_secret_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+## Security best practices
+
+<AccordionGroup>
+  <Accordion title="Use environment variables">
+    Never hardcode API keys in your source code. Use environment variables or secret management services.
+  </Accordion>
+  <Accordion title="Rotate keys regularly">
+    Generate new API keys periodically and revoke old ones to minimize security risks.
+  </Accordion>
+  <Accordion title="Use test keys in development">
+    Always use `csk_test_` or `cpk_test_` keys during development to avoid accidental charges.
+  </Accordion>
+  <Accordion title="Whitelist domains for publishable keys">
+    Configure domain whitelisting for `cpk_` keys to prevent unauthorized usage.
+  </Accordion>
+  <Accordion title="Monitor API key usage">
+    Regularly review API key activity in your dashboard to detect suspicious usage.
+  </Accordion>
+  <Accordion title="Revoke compromised keys immediately">
+    If you suspect a key has been exposed, revoke it immediately and generate a new one.
+  </Accordion>
+</AccordionGroup>
+
+## Key management
+
+### Rotating API keys
+
+To rotate an API key:
+
+1. Generate a new API key in your dashboard
+2. Update your application to use the new key
+3. Test that the new key works correctly
+4. Revoke the old key
+
+### Revoking API keys
+
+Revoke a key immediately if:
+- The key has been exposed publicly
+- You no longer need the key
+- You suspect unauthorized access
+
+Go to your dashboard → API Keys → Select the key → **Revoke**
+
+<Warning>
+  Revoking a key is permanent and cannot be undone. Make sure you've updated all applications using the old key.
+</Warning>
+
+## Testing authentication
+
+Test your API key with a simple request:
+
+<CodeGroup>
+```typescript TypeScript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+try {
+  const response = await cencori.ai.chat({
+    messages: [{ role: 'user', content: 'Test' }],
+    model: 'gpt-4o'
+  });
+  console.log('✓ Authentication successful');
+} catch (error) {
+  console.error('✗ Authentication failed:', error.message);
+}
+```
+
+```python Python
+from cencori import Cencori, AuthenticationError
+import os
+
+cencori = Cencori(api_key=os.getenv("CENCORI_API_KEY"))
+
+try:
+    response = cencori.ai.chat(
+        messages=[{"role": "user", "content": "Test"}],
+        model="gpt-4o"
+    )
+    print("✓ Authentication successful")
+except AuthenticationError as e:
+    print(f"✗ Authentication failed: {e}")
+```
+
+```bash cURL
+curl https://api.cencori.com/v1/ai/chat \
+  -H "CENCORI_API_KEY: $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Test"}]}'
+```
+</CodeGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Make your first API request
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore the complete API
+  </Card>
+  <Card title="Security" icon="shield" href="/security/api-keys">
+    Learn more about API key security
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle authentication errors
+  </Card>
+</CardGroup>

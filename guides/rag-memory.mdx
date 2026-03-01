@@ -1,0 +1,501 @@
+---
+title: RAG and Memory Usage
+description: Build AI applications with long-term memory using vector search and semantic retrieval
+---
+
+# RAG and Memory Usage
+
+Cencori's Memory API provides vector storage for Retrieval-Augmented Generation (RAG), conversation history, and semantic search.
+
+## What is RAG?
+
+Retrieval-Augmented Generation combines AI language models with external knowledge:
+
+1. **Store** - Embed and store your knowledge base
+2. **Retrieve** - Search for relevant context using semantic similarity
+3. **Generate** - Send context to the AI model along with the user query
+
+## Memory Architecture
+
+```typescript packages/sdk/src/memory/index.ts
+export interface MemoryNamespace {
+  id: string;
+  name: string;
+  description?: string;
+  embeddingModel: string;
+  dimensions: number;
+  metadata: Record<string, unknown>;
+  memoryCount?: number;
+  createdAt: string;
+}
+
+export interface Memory {
+  id: string;
+  namespace: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  similarity?: number;
+  expiresAt?: string;
+  createdAt: string;
+}
+```
+
+## Quick Start
+
+<Steps>
+
+1. **Create a Namespace**
+   
+   Namespaces organize memories by category:
+   
+   ```typescript
+   const namespace = await cencori.memory.createNamespace({
+     name: 'product-docs',
+     description: 'Product documentation',
+     embeddingModel: 'text-embedding-3-small',
+     dimensions: 1536
+   });
+   ```
+
+2. **Store Memories**
+   
+   Add content with automatic embedding:
+   
+   ```typescript
+   await cencori.memory.store({
+     namespace: 'product-docs',
+     content: 'Cencori provides unified AI API access',
+     metadata: { category: 'overview', page: 'intro' }
+   });
+   ```
+
+3. **Search Memories**
+   
+   Find relevant content using semantic search:
+   
+   ```typescript
+   const results = await cencori.memory.search({
+     namespace: 'product-docs',
+     query: 'How do I access AI models?',
+     limit: 5
+   });
+   ```
+
+4. **Use in RAG**
+   
+   Combine search results with AI generation:
+   
+   ```typescript
+   const context = results.results
+     .map(r => r.content)
+     .join('\n\n');
+
+   const response = await cencori.ai.chat({
+     messages: [
+       { role: 'system', content: `Context: ${context}` },
+       { role: 'user', content: query }
+     ],
+     model: 'gpt-4o'
+   });
+   ```
+
+</Steps>
+
+## Complete RAG Implementation
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Cencori } from '@cencori/sdk';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+class RAGEngine {
+  private namespace: string;
+
+  constructor(namespace: string) {
+    this.namespace = namespace;
+  }
+
+  // Index documents
+  async indexDocuments(documents: Array<{
+    content: string;
+    metadata: Record<string, any>;
+  }>) {
+    console.log(`Indexing ${documents.length} documents...`);
+    
+    for (const doc of documents) {
+      await cencori.memory.store({
+        namespace: this.namespace,
+        content: doc.content,
+        metadata: doc.metadata
+      });
+    }
+    
+    console.log('Indexing complete');
+  }
+
+  // Search and retrieve
+  async retrieve(query: string, limit: number = 5) {
+    const results = await cencori.memory.search({
+      namespace: this.namespace,
+      query,
+      limit,
+      threshold: 0.7 // Minimum similarity score
+    });
+
+    return results.results;
+  }
+
+  // RAG query
+  async query(userQuery: string, options?: {
+    model?: string;
+    temperature?: number;
+  }) {
+    // 1. Retrieve relevant context
+    const memories = await this.retrieve(userQuery);
+    
+    if (memories.length === 0) {
+      return {
+        content: 'No relevant information found.',
+        sources: []
+      };
+    }
+
+    // 2. Build context
+    const context = memories
+      .map((m, i) => 
+        `[${i + 1}] ${m.content}\nSource: ${JSON.stringify(m.metadata)}`
+      )
+      .join('\n\n');
+
+    // 3. Generate response with context
+    const response = await cencori.ai.chat({
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful assistant. Answer questions using the provided context. If the context doesn't contain the answer, say so.\n\nContext:\n${context}`
+        },
+        {
+          role: 'user',
+          content: userQuery
+        }
+      ],
+      model: options?.model || 'gpt-4o',
+      temperature: options?.temperature || 0.3
+    });
+
+    return {
+      content: response.content,
+      sources: memories.map(m => m.metadata),
+      usage: response.usage
+    };
+  }
+}
+
+// Usage
+const rag = new RAGEngine('product-docs');
+
+// Index your documents
+await rag.indexDocuments([
+  {
+    content: 'Cencori provides unified API access to OpenAI, Anthropic, and Google models.',
+    metadata: { page: 'overview', section: 'intro' }
+  },
+  {
+    content: 'You can switch between models by changing the model parameter.',
+    metadata: { page: 'models', section: 'switching' }
+  }
+]);
+
+// Query with RAG
+const result = await rag.query('How do I use different AI models?');
+console.log(result.content);
+console.log('Sources:', result.sources);
+```
+
+```python Python
+from cencori import Cencori
+from typing import List, Dict, Any
+
+cencori = Cencori(api_key="your-api-key")
+
+class RAGEngine:
+    def __init__(self, namespace: str):
+        self.namespace = namespace
+    
+    def index_documents(self, documents: List[Dict[str, Any]]):
+        """Index documents into memory."""
+        print(f"Indexing {len(documents)} documents...")
+        
+        for doc in documents:
+            cencori.memory.store(
+                namespace=self.namespace,
+                content=doc["content"],
+                metadata=doc["metadata"]
+            )
+        
+        print("Indexing complete")
+    
+    def retrieve(self, query: str, limit: int = 5):
+        """Retrieve relevant memories."""
+        results = cencori.memory.search(
+            namespace=self.namespace,
+            query=query,
+            limit=limit,
+            threshold=0.7
+        )
+        return results.results
+    
+    def query(self, user_query: str, model: str = "gpt-4o"):
+        """RAG query with context retrieval."""
+        # 1. Retrieve context
+        memories = self.retrieve(user_query)
+        
+        if not memories:
+            return {
+                "content": "No relevant information found.",
+                "sources": []
+            }
+        
+        # 2. Build context
+        context = "\n\n".join([
+            f"[{i+1}] {m.content}\nSource: {m.metadata}"
+            for i, m in enumerate(memories)
+        ])
+        
+        # 3. Generate with context
+        response = cencori.ai.chat(
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"Answer using this context:\n\n{context}"
+                },
+                {"role": "user", "content": user_query}
+            ],
+            model=model,
+            temperature=0.3
+        )
+        
+        return {
+            "content": response.content,
+            "sources": [m.metadata for m in memories],
+            "usage": response.usage
+        }
+
+# Usage
+rag = RAGEngine("product-docs")
+
+# Index documents
+rag.index_documents([
+    {
+        "content": "Cencori provides unified API access.",
+        "metadata": {"page": "overview"}
+    }
+])
+
+# Query
+result = rag.query("How do I use different AI models?")
+print(result["content"])
+print("Sources:", result["sources"])
+```
+
+</CodeGroup>
+
+## Conversation Memory
+
+Store and retrieve conversation history for personalized experiences:
+
+```typescript
+class ConversationMemory {
+  private namespace = 'conversations';
+
+  async store(userId: string, message: {
+    role: 'user' | 'assistant';
+    content: string;
+  }) {
+    await cencori.memory.store({
+      namespace: this.namespace,
+      content: message.content,
+      metadata: {
+        userId,
+        role: message.role,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+
+  async recall(userId: string, query: string) {
+    const results = await cencori.memory.search({
+      namespace: this.namespace,
+      query,
+      limit: 10,
+      filter: { userId } // Filter by user
+    });
+
+    return results.results;
+  }
+
+  async chatWithMemory(userId: string, message: string) {
+    // Store user message
+    await this.store(userId, { role: 'user', content: message });
+
+    // Recall relevant history
+    const history = await this.recall(userId, message);
+    const context = history
+      .map(h => `${h.metadata.role}: ${h.content}`)
+      .join('\n');
+
+    // Generate with context
+    const response = await cencori.ai.chat({
+      messages: [
+        {
+          role: 'system',
+          content: `Previous conversation:\n${context}`
+        },
+        { role: 'user', content: message }
+      ],
+      model: 'gpt-4o'
+    });
+
+    // Store assistant response
+    await this.store(userId, {
+      role: 'assistant',
+      content: response.content
+    });
+
+    return response.content;
+  }
+}
+```
+
+## Memory SDK Reference
+
+```typescript packages/sdk/src/memory/index.ts
+export class MemoryClient {
+  // Create namespace
+  async createNamespace(options: CreateNamespaceOptions): Promise<MemoryNamespace>
+
+  // List namespaces
+  async listNamespaces(): Promise<MemoryNamespace[]>
+
+  // Store memory
+  async store(options: StoreMemoryOptions): Promise<Memory>
+
+  // Search memories
+  async search(options: SearchMemoryOptions): Promise<SearchResult>
+
+  // Get memory by ID
+  async get(id: string): Promise<Memory>
+
+  // Delete memory
+  async delete(id: string): Promise<{ deleted: boolean; id: string }>
+
+  // Batch operations
+  async storeBatch(
+    namespace: string,
+    items: Array<{ content: string; metadata?: Record<string, unknown> }>
+  ): Promise<Memory[]>
+
+  // Delete by filter
+  async deleteByFilter(
+    namespace: string,
+    filter: Record<string, unknown>
+  ): Promise<{ deleted: number }>
+}
+```
+
+## Advanced Patterns
+
+### Hybrid Search
+
+Combine semantic and keyword search:
+
+```typescript
+async function hybridSearch(query: string) {
+  // Semantic search
+  const semantic = await cencori.memory.search({
+    namespace: 'docs',
+    query,
+    limit: 10
+  });
+
+  // Keyword search (filter by metadata)
+  const keywords = query.toLowerCase().split(' ');
+  const filtered = semantic.results.filter(r =>
+    keywords.some(k => r.content.toLowerCase().includes(k))
+  );
+
+  return filtered;
+}
+```
+
+### Reranking
+
+Rerank results for better relevance:
+
+```typescript
+async function rerank(query: string, results: Memory[]) {
+  // Use AI to rerank results
+  const prompt = `Given this query: "${query}"\n\nRank these results by relevance (1-${results.length}):\n${results.map((r, i) => `${i + 1}. ${r.content}`).join('\n')}`;
+
+  const response = await cencori.ai.chat({
+    messages: [{ role: 'user', content: prompt }],
+    model: 'gpt-4o',
+    temperature: 0
+  });
+
+  // Parse and reorder results
+  // Implementation depends on response format
+}
+```
+
+### Chunking Strategies
+
+Split large documents effectively:
+
+```typescript
+function chunkDocument(text: string, chunkSize: number = 500) {
+  const chunks: string[] = [];
+  const sentences = text.split(/[.!?]+/);
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    if (currentChunk.length + sentence.length > chunkSize) {
+      if (currentChunk) chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    } else {
+      currentChunk += ' ' + sentence;
+    }
+  }
+
+  if (currentChunk) chunks.push(currentChunk.trim());
+  return chunks;
+}
+
+// Index with chunking
+const chunks = chunkDocument(largeDocument);
+await cencori.memory.storeBatch('docs', 
+  chunks.map((chunk, i) => ({
+    content: chunk,
+    metadata: { docId: 'doc-123', chunkIndex: i }
+  }))
+);
+```
+
+## Best Practices
+
+- **Namespace Organization**: Use separate namespaces for different data types
+- **Metadata Richness**: Add comprehensive metadata for filtering
+- **Chunk Size**: Keep chunks 300-800 tokens for optimal retrieval
+- **Similarity Threshold**: Use 0.7+ for high precision, 0.5+ for high recall
+- **Memory Expiration**: Set expiration dates for temporary data
+- **Batch Operations**: Use batch APIs for bulk indexing
+
+## Next Steps
+
+- [Error Handling](/guides/error-handling) - Handle memory API errors
+- [Cost Optimization](/guides/cost-optimization) - Optimize embedding costs
+- [Streaming](/guides/streaming) - Stream responses with RAG context

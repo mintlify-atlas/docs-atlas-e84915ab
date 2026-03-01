@@ -1,0 +1,391 @@
+---
+title: Storage
+description: AI-native storage for vectors, audit logs, and semantic caching with PostgreSQL and Supabase
+---
+
+<Note>
+  **Status**: Coming soon
+  
+  The Storage primitive is currently in development. This page describes the planned architecture and capabilities.
+</Note>
+
+Cencori Storage provides AI-native storage for vectors, audit logs, and semantic caching. Built on PostgreSQL with pgvector, it's optimized for RAG applications, compliance logging, and intelligent caching.
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Vector sync" icon="magnifying-glass">
+    Manage and query vector embeddings for RAG applications
+  </Card>
+  <Card title="Audit logs" icon="file-shield">
+    Immutable traceability for compliance and debugging
+  </Card>
+  <Card title="Semantic cache" icon="bolt">
+    Reduce costs by caching similar AI responses
+  </Card>
+  <Card title="Knowledge base" icon="book">
+    Store and query unstructured data with automatic embedding
+  </Card>
+</CardGroup>
+
+## Vector storage
+
+### Upsert vectors
+
+Store embeddings for semantic search:
+
+```typescript
+// Coming soon
+await cencori.storage.vectors.upsert([
+  {
+    id: 'doc-1',
+    values: [0.1, 0.2, 0.3, ...], // 1536-dim embedding
+    metadata: {
+      title: 'Product documentation',
+      url: 'https://docs.example.com/product',
+      category: 'technical'
+    }
+  },
+  {
+    id: 'doc-2',
+    values: [0.4, 0.5, 0.6, ...],
+    metadata: {
+      title: 'API reference',
+      url: 'https://docs.example.com/api',
+      category: 'reference'
+    }
+  }
+]);
+```
+
+### Semantic search
+
+Find similar vectors using cosine similarity:
+
+```typescript
+// Coming soon
+const results = await cencori.storage.vectors.search(
+  'How do I authenticate API requests?',
+  {
+    limit: 5,
+    filter: { category: 'technical' },
+    minScore: 0.7
+  }
+);
+
+// [
+//   {
+//     id: 'doc-1',
+//     score: 0.92,
+//     metadata: { title: 'Product documentation', ... },
+//     content: 'To authenticate API requests...'
+//   },
+//   ...
+// ]
+```
+
+### Automatic embedding
+
+Generate embeddings automatically using Cencori's AI Gateway:
+
+```typescript
+// Coming soon
+await cencori.storage.vectors.upsert([
+  {
+    id: 'doc-1',
+    content: 'Long form documentation text...', // Auto-embedded
+    metadata: { source: 'docs' }
+  }
+]);
+```
+
+## Audit logging
+
+Cencori already logs all AI Gateway requests to PostgreSQL for compliance and debugging.
+
+### AI request logs
+
+Defined in `database/migrations/ai_requests_table.sql:5`:
+
+```sql
+CREATE TABLE ai_requests (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  model TEXT NOT NULL,
+  prompt_tokens INTEGER NOT NULL,
+  completion_tokens INTEGER NOT NULL,
+  total_tokens INTEGER NOT NULL,
+  cost_usd DECIMAL(10, 6) NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  status TEXT CHECK (status IN ('success', 'error', 'filtered')),
+  request_payload JSONB NOT NULL,
+  response_payload JSONB,
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### Security incident logs
+
+Security violations are logged separately for threat analysis (`database/migrations/security_incidents_table.sql:4`):
+
+```sql
+CREATE TABLE security_incidents (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  incident_type TEXT CHECK (incident_type IN (
+    'jailbreak', 'pii_input', 'pii_output',
+    'harmful_content', 'instruction_leakage',
+    'prompt_injection', 'multi_vector'
+  )),
+  severity TEXT CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  risk_score DECIMAL(3,2),
+  confidence DECIMAL(3,2),
+  details JSONB,
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### API Gateway logs
+
+HTTP-level logs for all API requests (`database/migrations/013_api_gateway_request_logs.sql:3`):
+
+```sql
+CREATE TABLE api_gateway_request_logs (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  endpoint TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  ip_address TEXT,
+  country_code TEXT,
+  error_message TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### Query logs
+
+Query audit logs using the SDK:
+
+```typescript
+// Coming soon
+const logs = await cencori.storage.audit.query({
+  projectId: 'proj_abc123',
+  startDate: '2026-01-01',
+  endDate: '2026-03-01',
+  filters: {
+    status: 'error',
+    model: 'gpt-4o'
+  },
+  limit: 100
+});
+```
+
+## Semantic caching
+
+Cache AI responses based on semantic similarity to reduce costs and latency.
+
+### How it works
+
+1. Hash the prompt and generate an embedding
+2. Search for similar cached responses (cosine similarity > 0.95)
+3. If found, return cached response
+4. If not found, call AI provider and cache the result
+
+```typescript
+// Coming soon
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'What is the capital of France?' }],
+  cache: {
+    enabled: true,
+    ttl: 86400, // 24 hours
+    similarityThreshold: 0.95
+  }
+});
+
+if (response.cached) {
+  console.log('Cache hit! Saved $0.002');
+}
+```
+
+### Cache statistics
+
+```typescript
+// Coming soon
+const stats = await cencori.storage.cache.stats({
+  projectId: 'proj_abc123',
+  period: '7d'
+});
+
+// {
+//   hitRate: 0.42,
+//   totalRequests: 10000,
+//   cacheHits: 4200,
+//   cacheMisses: 5800,
+//   costSaved: 12.50,
+//   avgLatencyReduction: 234
+// }
+```
+
+## Knowledge base
+
+Build RAG applications with automatic chunking and embedding.
+
+### Add documents
+
+```typescript
+// Coming soon
+await cencori.storage.knowledge.add([
+  {
+    content: 'Long form documentation...',
+    metadata: {
+      source: 'docs',
+      url: 'https://docs.example.com',
+      lastUpdated: '2026-03-01'
+    }
+  }
+]);
+```
+
+Cencori automatically:
+1. Splits content into semantic chunks
+2. Generates embeddings for each chunk
+3. Stores vectors with metadata
+4. Maintains parent-child relationships
+
+### Query knowledge base
+
+```typescript
+// Coming soon
+const answer = await cencori.storage.knowledge.query(
+  'How do I authenticate API requests?',
+  {
+    model: 'gpt-4o',
+    maxChunks: 5,
+    includeSourceLinks: true
+  }
+);
+
+// {
+//   answer: 'To authenticate API requests, use the X-API-Key header...',
+//   sources: [
+//     { url: 'https://docs.example.com/auth', relevance: 0.92 },
+//     { url: 'https://docs.example.com/api', relevance: 0.87 }
+//   ],
+//   chunks: [...]
+// }
+```
+
+## File storage
+
+Store and process files for AI applications.
+
+### Upload files
+
+```typescript
+// Coming soon
+const file = await cencori.storage.files.upload(
+  fileBlob,
+  'contract.pdf',
+  {
+    metadata: { category: 'legal', year: 2026 }
+  }
+);
+```
+
+### Process files
+
+Extract text, images, and tables from documents:
+
+```typescript
+// Coming soon
+const processed = await cencori.storage.files.process(file.id, {
+  extractText: true,
+  extractImages: true,
+  extractTables: true,
+  ocrImages: true
+});
+
+// {
+//   text: 'Extracted text from PDF...',
+//   images: [{ url: 'https://...', caption: '...' }],
+//   tables: [{ headers: [...], rows: [...] }]
+// }
+```
+
+## Database architecture
+
+Cencori Storage is built on PostgreSQL with Supabase:
+
+- **Database**: PostgreSQL 15 with pgvector extension
+- **Auth**: Supabase Auth with Row Level Security (RLS)
+- **Storage**: Supabase Storage for file uploads
+- **Realtime**: Supabase Realtime for live updates
+
+### Vector indexes
+
+```sql
+-- HNSW index for fast approximate search
+CREATE INDEX vectors_embedding_idx 
+ON vectors 
+USING hnsw (embedding vector_cosine_ops);
+
+-- Metadata index for filtering
+CREATE INDEX vectors_metadata_idx 
+ON vectors 
+USING GIN (metadata);
+```
+
+## Performance
+
+### Vector search latency
+
+| Collection Size | Search Latency (p95) |
+|-----------------|---------------------|
+| 10K vectors | < 10ms |
+| 100K vectors | < 50ms |
+| 1M vectors | < 200ms |
+| 10M vectors | < 500ms |
+
+### Cache hit rates
+
+Typical cache hit rates by use case:
+
+- **Customer support**: 40-60%
+- **Documentation Q&A**: 30-50%
+- **Product recommendations**: 20-30%
+- **Code generation**: 10-20%
+
+## Entry point
+
+```
+POST /api/storage/vectors
+```
+
+**Status**: Planned
+
+## SDK reference
+
+Implementation in `packages/sdk/src/storage/index.ts:12`:
+
+```typescript
+export class StorageNamespace {
+  readonly vectors = new VectorsNamespace();
+  readonly knowledge = new KnowledgeNamespace();
+  readonly files = new FilesNamespace();
+}
+```
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Join waitlist" icon="envelope" href="https://cencori.com/storage">
+    Get early access to Cencori Storage
+  </Card>
+  <Card title="Build RAG apps" icon="book" href="/examples/rag">
+    Learn how to build retrieval-augmented generation applications
+  </Card>
+</CardGroup>

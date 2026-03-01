@@ -1,0 +1,277 @@
+---
+title: Web scanner
+description: Use the Cencori Scan web dashboard to scan repositories and track security over time
+---
+
+# Web scanner
+
+The Cencori Scan web dashboard provides a hosted version of the CLI scanner with additional features for teams, including persistent scan history, GitHub integration, and visual security reports.
+
+<Info>
+  Access the web scanner at [scan.cencori.com](https://scan.cencori.com)
+</Info>
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="GitHub integration" icon="github">
+    Connect your repositories and scan automatically on every push
+  </Card>
+  <Card title="Scan history" icon="clock-rotate-left">
+    Track security improvements over time with persistent history
+  </Card>
+  <Card title="Team collaboration" icon="users">
+    Share scans and security reports with your team
+  </Card>
+  <Card title="Visual reports" icon="chart-line">
+    Interactive security dashboards with detailed breakdowns
+  </Card>
+</CardGroup>
+
+## Getting started
+
+<Steps>
+  <Step title="Sign in with GitHub">
+    Visit [scan.cencori.com](https://scan.cencori.com) and sign in with your GitHub account
+  </Step>
+  <Step title="Connect repositories">
+    Select the repositories you want to scan from your GitHub organizations
+  </Step>
+  <Step title="Run your first scan">
+    Click **Scan Now** to run an initial security scan
+  </Step>
+  <Step title="Review results">
+    View your security score and detailed issue breakdown
+  </Step>
+</Steps>
+
+## Scanning repositories
+
+### Manual scans
+
+Run a scan on any connected repository:
+
+1. Navigate to your repository in the dashboard
+2. Click **Scan Now**
+3. Wait for the scan to complete (typically 10-30 seconds)
+4. Review the results
+
+### Automatic scans
+
+Enable automatic scanning to run security checks on every push:
+
+1. Go to repository settings
+2. Enable **Automatic Scanning**
+3. Choose scan triggers:
+   - On every push to main/master
+   - On pull requests
+   - On a schedule (daily, weekly)
+
+<Note>
+  Automatic scans are available on the Pro tier. See [pricing](/pricing/overview) for details.
+</Note>
+
+## Security dashboard
+
+The web dashboard provides comprehensive security analytics:
+
+### Overview
+
+- **Security score** - A-F tier grading
+- **Issue count** - Breakdown by severity (critical, high, medium, low)
+- **Trend analysis** - Security improvements over time
+- **Last scan date** - When the repository was last scanned
+
+### Issue details
+
+Each issue includes:
+
+- **Type** - Secret, PII, vulnerability, exposed route
+- **Severity** - Critical, high, medium, or low
+- **Location** - File path and line number
+- **Description** - What was detected and why it matters
+- **Remediation** - How to fix the issue
+
+### Historical tracking
+
+View security changes over time:
+
+- **Score history** - Track security grade improvements
+- **Issue trends** - See which types of issues are being resolved
+- **Commit correlation** - Link scans to specific commits
+- **Comparison view** - Compare scans side-by-side
+
+## Sharing and collaboration
+
+### Team access
+
+Invite team members to view and manage scans:
+
+1. Go to **Team Settings**
+2. Click **Invite Member**
+3. Enter their email address
+4. Set their role (Admin, Editor, Viewer)
+
+### Role permissions
+
+| Role | View scans | Run scans | Configure settings | Manage team |
+|------|-----------|-----------|-------------------|-------------|
+| **Viewer** | ✓ | ✗ | ✗ | ✗ |
+| **Editor** | ✓ | ✓ | ✓ | ✗ |
+| **Admin** | ✓ | ✓ | ✓ | ✓ |
+
+### Sharing reports
+
+Share scan results with external stakeholders:
+
+1. Open the scan report
+2. Click **Share**
+3. Generate a public link (valid for 30 days)
+4. Copy and share the link
+
+<Warning>
+  Shared links expose your scan results publicly. Only share with trusted parties.
+</Warning>
+
+## Notifications
+
+Configure alerts for security issues:
+
+### Email notifications
+
+Receive emails when:
+- Security score drops below a threshold
+- New critical or high-severity issues are detected
+- Automatic scans complete
+
+Configure email settings:
+1. Go to **Settings** → **Notifications**
+2. Enable **Email Notifications**
+3. Set severity threshold (critical, high, medium, low)
+4. Choose notification frequency (instant, daily digest)
+
+### Slack integration
+
+Send scan results to Slack:
+
+1. Go to **Integrations** → **Slack**
+2. Click **Connect to Slack**
+3. Authorize Cencori Scan
+4. Choose a channel for notifications
+5. Configure message format and filters
+
+### Webhook notifications
+
+Send scan results to custom endpoints:
+
+```typescript
+// Webhook payload format
+{
+  "event": "scan.completed",
+  "repository": "owner/repo",
+  "score": "C",
+  "issues": {
+    "critical": 2,
+    "high": 5,
+    "medium": 3,
+    "low": 1
+  },
+  "scan_url": "https://scan.cencori.com/scans/scan_abc123",
+  "timestamp": "2026-03-01T12:00:00Z"
+}
+```
+
+Configure webhooks:
+1. Go to **Settings** → **Webhooks**
+2. Click **Add Webhook**
+3. Enter your endpoint URL
+4. Select events to receive
+5. Save and test the webhook
+
+## Comparing with CLI
+
+| Feature | CLI | Web Dashboard |
+|---------|-----|---------------|
+| **Scan local files** | ✓ | ✗ |
+| **Scan GitHub repos** | ✗ | ✓ |
+| **Scan history** | ✗ | ✓ |
+| **Team collaboration** | ✗ | ✓ |
+| **AI auto-fix** | ✓ | ✓ |
+| **CI/CD integration** | ✓ | ✓ |
+| **Cost** | Free | Pro tier |
+
+<Tip>
+  Use the CLI for local development and the web dashboard for team collaboration and continuous monitoring.
+</Tip>
+
+## Exporting results
+
+Export scan results in multiple formats:
+
+### JSON export
+
+Download machine-readable scan data:
+
+```bash
+curl https://api.cencori.com/scan/results/scan_abc123 \
+  -H "Authorization: Bearer your_token" \
+  > scan-results.json
+```
+
+### PDF report
+
+Generate a PDF security report:
+
+1. Open the scan report
+2. Click **Export** → **PDF**
+3. Download the generated PDF
+
+PDF reports include:
+- Executive summary
+- Security score and trends
+- Detailed issue breakdown
+- Remediation recommendations
+
+### CSV export
+
+Export issues as CSV for analysis:
+
+1. Click **Export** → **CSV**
+2. Download the CSV file
+
+CSV includes: type, severity, file, line, description, status
+
+## Security and privacy
+
+### Data handling
+
+- Scans analyze repository metadata and code patterns
+- No code is stored permanently on Cencori servers
+- Scan results are encrypted at rest and in transit
+- Access controls ensure only authorized users view results
+
+### GitHub permissions
+
+Cencori Scan requests minimal GitHub permissions:
+- **Read access** to repository contents (for scanning)
+- **Read access** to repository metadata
+- **No write access** to code or settings
+
+You can revoke access anytime from your GitHub settings.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="GitHub integration" icon="github" href="/scan/github-integration">
+    Set up automatic scanning with GitHub
+  </Card>
+  <Card title="CLI usage" icon="terminal" href="/scan/cli-usage">
+    Use the CLI scanner for local development
+  </Card>
+  <Card title="CI/CD integration" icon="gears" href="/scan/ci-cd-integration">
+    Add security scanning to your CI/CD pipeline
+  </Card>
+  <Card title="Security scoring" icon="star" href="/scan/security-scoring">
+    Understand how security scores are calculated
+  </Card>
+</CardGroup>

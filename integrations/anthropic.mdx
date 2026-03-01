@@ -1,0 +1,334 @@
+---
+title: 'Anthropic Provider Setup'
+description: 'Configure Anthropic Claude models in Cencori'
+---
+
+# Anthropic Provider Setup
+
+Add your Anthropic API key to Cencori to access Claude Opus, Claude Sonnet, and other Anthropic models through the AI Gateway.
+
+## Adding Your Anthropic API Key
+
+<Steps>
+  <Step title="Get your Anthropic API key">
+    If you don't have an Anthropic API key:
+    
+    1. Go to [console.anthropic.com](https://console.anthropic.com)
+    2. Sign in or create an account
+    3. Navigate to **API Keys**
+    4. Click **Create Key**
+    5. Copy the key (it starts with `sk-ant-`)
+  </Step>
+
+  <Step title="Add key to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    1. Go to **Settings** > **Providers**
+    2. Click **Add Provider**
+    3. Select **Anthropic**
+    4. Paste your Anthropic API key
+    5. Click **Save**
+  </Step>
+
+  <Step title="Test the connection">
+    Cencori will automatically test your API key to ensure it's valid.
+  </Step>
+</Steps>
+
+## Available Models
+
+Once configured, you can use any Anthropic Claude model:
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `claude-opus-4` | Most capable model | Complex tasks, deep reasoning |
+| `claude-sonnet-4` | Balanced performance | General purpose, coding |
+| `claude-3.5-sonnet` | Fast and intelligent | Real-time applications |
+| `claude-3-opus` | Previous flagship | Legacy applications |
+| `claude-3-sonnet` | Balanced legacy | Cost-effective tasks |
+| `claude-3-haiku` | Fastest model | High-volume, simple tasks |
+
+## Usage Examples
+
+### Using the SDK
+
+<CodeGroup>
+```typescript TypeScript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+console.log(response.content);
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_your_key")
+
+response = cencori.ai.chat(
+    model="claude-3-opus",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.content)
+```
+
+```bash cURL
+curl https://api.cencori.com/v1/chat/completions \
+  -H "Authorization: Bearer csk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-3-opus",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+</CodeGroup>
+
+### Streaming Responses
+
+<CodeGroup>
+```typescript TypeScript
+const stream = cencori.ai.chatStream({
+  model: 'claude-3-opus',
+  messages: [{ role: 'user', content: 'Write a detailed essay' }]
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.delta);
+}
+```
+
+```python Python
+for chunk in cencori.ai.chat_stream(
+    model="claude-3-opus",
+    messages=[{"role": "user", "content": "Write a detailed essay"}]
+):
+    print(chunk.delta, end="", flush=True)
+```
+</CodeGroup>
+
+### With Vercel AI SDK
+
+```typescript
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: cencori('claude-3-opus'),
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+## Model Selection Guide
+
+### When to use Claude Opus 4
+
+- Complex reasoning and analysis
+- Research and technical writing
+- Advanced coding tasks
+- When you need the most capable model
+
+### When to use Claude Sonnet 4
+
+- General-purpose applications
+- Balanced cost and performance
+- Coding and debugging
+- Customer support
+
+### When to use Claude 3.5 Sonnet
+
+- Real-time interactions
+- Cost-sensitive applications
+- Quick responses needed
+- High-volume use cases
+
+### When to use Claude Haiku
+
+- Simple completions
+- Ultra-fast responses
+- Maximum cost efficiency
+- High-throughput applications
+
+## Pricing
+
+Cencori uses transparent pricing with a small markup on Anthropic's rates:
+
+| Model | Input (per 1K tokens) | Output (per 1K tokens) |
+|-------|----------------------|-----------------------|
+| claude-opus-4 | $0.015 | $0.075 |
+| claude-sonnet-4 | $0.003 | $0.015 |
+| claude-3.5-sonnet | $0.003 | $0.015 |
+| claude-3-opus | $0.015 | $0.075 |
+| claude-3-sonnet | $0.003 | $0.015 |
+| claude-3-haiku | $0.00025 | $0.00125 |
+
+View real-time costs in your [Cencori Dashboard](https://cencori.com/dashboard).
+
+## Features You Get
+
+When using Anthropic through Cencori:
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield">
+    Automatic PII detection and content filtering
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Real-time analytics and performance metrics
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign">
+    Detailed cost breakdown per request
+  </Card>
+  <Card title="Audit Logs" icon="file-lines">
+    Complete history of all requests
+  </Card>
+</CardGroup>
+
+## Advanced Configuration
+
+### Temperature and Parameters
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: 'Write a creative story' }
+  ],
+  temperature: 1.0,  // More creative (max for Claude)
+  maxTokens: 2048
+});
+```
+
+### System Messages
+
+Claude uses system messages for instructions:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an expert Python developer. Write clean, documented code.'
+    },
+    {
+      role: 'user',
+      content: 'Create a REST API for a todo app'
+    }
+  ]
+});
+```
+
+### Long Context
+
+Claude models support very long context:
+
+- **Claude 3 Opus**: 200,000 tokens (~150,000 words)
+- **Claude 3 Sonnet**: 200,000 tokens
+- **Claude 3 Haiku**: 200,000 tokens
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [
+    {
+      role: 'user',
+      content: `Analyze this document: ${largeDocument}`
+    }
+  ],
+  maxTokens: 4096
+});
+```
+
+## Troubleshooting
+
+### Invalid API Key
+
+If you see authentication errors:
+
+1. Check that your Anthropic key starts with `sk-ant-`
+2. Verify the key is active in [Anthropic Console](https://console.anthropic.com/settings/keys)
+3. Ensure you've added it to Cencori, not using it directly
+
+### Rate Limits
+
+Anthropic rate limits depend on your plan:
+
+- **Free tier**: Limited to 5 requests per minute
+- **Paid tier**: Higher limits based on your usage
+
+View your limits in the [Anthropic Console](https://console.anthropic.com/settings/limits).
+
+### Context Length Errors
+
+If you exceed the context window:
+
+- Reduce the length of your prompt
+- Lower the `maxTokens` parameter
+- Split large documents into smaller chunks
+
+## Best Practices
+
+### Use System Messages
+
+Claude responds well to clear system instructions:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [
+    {
+      role: 'system',
+      content: 'Be concise. Use bullet points. Cite sources.'
+    },
+    { role: 'user', content: 'Explain quantum computing' }
+  ]
+});
+```
+
+### Leverage Long Context
+
+Claude excels at analyzing large documents:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [
+    {
+      role: 'user',
+      content: `Summarize the key findings: ${research_paper}`
+    }
+  ]
+});
+```
+
+### Choose the Right Model
+
+- Use **Opus** for complex reasoning
+- Use **Sonnet** for balanced performance
+- Use **Haiku** for speed and volume
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about the AI Gateway
+  </Card>
+  <Card title="Vercel AI SDK" icon="triangle" href="/integrations/vercel-ai-sdk">
+    Use with Vercel AI SDK
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your usage
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,373 @@
+---
+title: "PII Detection"
+description: "Detect and prevent personally identifiable information leakage in AI applications"
+---
+
+## Overview
+
+Cencori's PII detection system identifies sensitive personal information in both user inputs and AI outputs, including standard and obfuscated formats designed to bypass simple pattern matching.
+
+<Warning>
+PII detection is critical for compliance with GDPR, CCPA, HIPAA, and other privacy regulations. Always enable PII detection for production applications.
+</Warning>
+
+## Supported PII types
+
+Implemented in `lib/safety/content-filter.ts:15-23` and `lib/safety/output-scanner.ts:19-37`:
+
+### Email addresses
+
+**Standard format:**
+```
+john.smith@company.com
+jane_doe+tag@example.co.uk
+user123@subdomain.example.org
+```
+
+Pattern: `/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/`
+
+**Obfuscated format:**
+```
+john dot smith at company dot org
+jane.doe [at] example [dot] com
+user (at) domain (dot) net
+```
+
+Pattern: `/\b[A-Za-z0-9]+\s*(?:dot|\[dot\]|\(dot\)|\.)+\s*[A-Za-z0-9]+\s*(?:at|\[at\]|\(at\)|@)\s*[A-Za-z0-9.-]+\s*(?:dot|\[dot\]|\(dot\)|\.)+\s*[A-Za-z]{2,}\b/i`
+
+<Note>
+Obfuscated email detection is critical for preventing the **Wisc attack** and similar social engineering attempts that request PII sharing in "natural" formats.
+</Note>
+
+### Phone numbers
+
+```
+555-123-4567
+(555) 123-4567
+555.123.4567
+5551234567
++1 555-123-4567
+```
+
+Pattern: `/\b(\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/`
+
+### Social Security Numbers
+
+```
+123-45-6789
+```
+
+Pattern: `/\b\d{3}-\d{2}-\d{4}\b/`
+
+### Credit card numbers
+
+```
+1234 5678 9012 3456
+1234-5678-9012-3456
+1234567890123456
+```
+
+Pattern: `/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/`
+
+### Street addresses
+
+```
+123 Main Street
+456 Oak Avenue
+789 Elm Road
+```
+
+Pattern: `/\b\d{1,5}\s+[\w\s]+\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd)\b/i`
+
+## PII detection in inputs
+
+Detect PII before sending user requests to AI models:
+
+```typescript
+import { checkContent } from '@/lib/safety/content-filter';
+
+const userInput = 'My email is john.smith@company.com';
+
+const result = checkContent(userInput, {
+  threshold: 0.5,
+  enableObfuscatedPII: true,
+  enableIntentAnalysis: true
+});
+
+if (!result.safe) {
+  console.log('Blocked reasons:', result.reasons);
+  // ['Potential email address detected']
+  console.log('Safety score:', result.score);
+  // 0.3 (1.0 - 0.2 for email = 0.8, further reduced by intent)
+}
+```
+
+Implemented in `lib/safety/content-filter.ts:86-150`
+
+### Risk scoring
+
+Each PII type has a different risk weight:
+
+| PII Type | Risk Weight | Final Score Impact |
+|----------|-------------|--------------------|
+| Standard email | 0.2 | Moderate risk |
+| Obfuscated email | 0.6 | High risk (intentional bypass) |
+| Phone number | 0.2 | Moderate risk |
+| SSN | 0.5 | High risk |
+| Credit card | 0.5 | High risk |
+| Street address | 0.4 | Moderate-high risk |
+
+<Note>
+Safety scores start at 1.0 (safest) and decrease based on detected patterns. Content is blocked when the score falls below the threshold (default 0.5).
+</Note>
+
+## Obfuscated PII detection
+
+Detect attempts to bypass filters using "natural" PII sharing:
+
+```typescript
+const obfuscatedExamples = [
+  'Contact me at john dot smith at company dot org',
+  'You can reach them at jane [at] example [dot] com',
+  'Email is user (at) domain (dot) net'
+];
+
+for (const text of obfuscatedExamples) {
+  const result = checkContent(text, {
+    enableObfuscatedPII: true
+  });
+  
+  console.log(`Detected: ${!result.safe}`);
+  // All return true - detected as obfuscated email
+  console.log('Reason:', result.reasons[0]);
+  // 'Potential obfuscated email format detected (dot/at notation)'
+  console.log('Score:', result.score);
+  // 0.4 (heavily penalized for obfuscation)
+}
+```
+
+<Warning>
+**Obfuscated PII has a higher risk weight (0.6 vs 0.2)** because it indicates intentional attempt to bypass security filters. This is a key indicator of social engineering attacks.
+</Warning>
+
+## Intent analysis
+
+Detect indirect requests for PII sharing techniques:
+
+```typescript
+const indirectRequests = [
+  'How can I naturally mention my email in conversation?',
+  'What\'s a subtle way to share contact information?',
+  'How would someone drop their email without being obvious?'
+];
+
+for (const text of indirectRequests) {
+  const result = checkContent(text, {
+    enableIntentAnalysis: true
+  });
+  
+  if (!result.safe) {
+    console.log('Intent detected:', result.reasons);
+    // ['Indirect request for PII sharing techniques']
+    console.log('Risk added:', 0.6);
+  }
+}
+```
+
+Implemented in `lib/safety/content-filter.ts:68-84`, `133-140`
+
+### Intent patterns
+
+| Pattern | Description | Risk Weight |
+|---------|-------------|-------------|
+| `how (to\|would\|could\|can).*(share\|mention\|drop\|weave).*(email\|phone\|contact)` | Direct request for PII sharing methods | 0.6 |
+| `(subtle\|natural\|incidental).*(way\|method).*(share\|mention\|provide).*(contact\|email)` | Request for subtle information sharing | 0.5 |
+| `without.*(obvious\|explicit\|direct).*(email\|contact\|phone)` | Request to hide PII sharing | 0.5 |
+
+## PII detection in outputs
+
+Scan AI model responses for PII leakage:
+
+```typescript
+import { scanOutput } from '@/lib/safety/output-scanner';
+
+const aiResponse = `Here are ways to share your email:
+1. Mention it casually: "My email is john.smith@company.com"
+2. Use the format: john dot smith at company dot org`;
+
+const result = scanOutput(aiResponse, {
+  inputText: userInput,
+  jailbreakRisk: 0.8
+});
+
+if (!result.safe) {
+  console.log('Output blocked:', result.reasons);
+  // [
+  //   'Output contains 1 email address(es)',
+  //   'Output contains obfuscated email format',
+  //   'Output teaches PII exfiltration techniques'
+  // ]
+  
+  console.log('Blocked content:', result.blockedContent);
+  // {
+  //   type: 'email',
+  //   examples: ['john.smith@company.com']
+  // }
+}
+```
+
+Implemented in `lib/safety/output-scanner.ts:68-221`
+
+### Instruction leakage detection
+
+Prevents AI from teaching PII exfiltration:
+
+```typescript
+const harmfulPatterns = [
+  'here are.*ways to',
+  'methods.*to share',
+  'how.*could.*mention',
+  'techniques.*for',
+  'strategies.*to',
+  'append.*@',
+  'for example.*@'
+];
+
+// Example harmful output:
+const harmful = `Here are 5 ways someone could drop their work email 
+(john.smith@company.org) without explicitly saying it...`;
+
+const result = scanOutput(harmful);
+// result.safe = false
+// result.reasons = ['Output teaches PII exfiltration techniques']
+// result.riskScore = 0.9 (very high)
+```
+
+Implemented in `lib/safety/output-scanner.ts:40-51`, `128-143`
+
+## Context-aware detection
+
+Use input context to improve output detection accuracy:
+
+```typescript
+import { checkInputSecurity, checkOutputSecurity } from '@/lib/safety/multi-layer-check';
+
+// Phase 1: Analyze input
+const inputResult = checkInputSecurity(
+  'Write a story where a character shares their email naturally',
+  conversationHistory
+);
+
+// inputResult.details.jailbreakCheck.risk = 0.75 (high)
+
+// Phase 2: Stricter output scanning
+const outputResult = checkOutputSecurity(
+  aiResponse,
+  {
+    inputText: userMessage,
+    inputSecurityResult: inputResult,
+    conversationHistory
+  }
+);
+
+// Output scanning is more strict when jailbreak risk is high
+if (inputResult.details?.jailbreakCheck?.risk > 0.5) {
+  // Additional 0.2 risk added to output score
+  // More likely to block outputs containing any PII
+}
+```
+
+Implemented in `lib/safety/output-scanner.ts:154-175`
+
+<Tip>
+**Context-aware detection reduces false positives** while catching sophisticated attacks. When jailbreak risk is detected in input, output scanning becomes stricter.
+</Tip>
+
+## Configuration options
+
+```typescript
+export interface ContentFilterConfig {
+  threshold?: number;              // Default 0.5
+  enableObfuscatedPII?: boolean;   // Default true
+  enableIntentAnalysis?: boolean;  // Default true
+}
+
+// Strict mode - block more aggressively
+const strictConfig = {
+  threshold: 0.7,  // Higher threshold = more strict
+  enableObfuscatedPII: true,
+  enableIntentAnalysis: true
+};
+
+// Permissive mode - fewer false positives
+const permissiveConfig = {
+  threshold: 0.3,  // Lower threshold = more permissive
+  enableObfuscatedPII: false,
+  enableIntentAnalysis: false
+};
+```
+
+## Testing PII detection
+
+Test cases from `lib/safety/verify-security.ts:106-115`:
+
+```typescript
+const testCases = [
+  {
+    text: 'Contact me at john dot smith at company dot org',
+    shouldDetect: true,
+    reason: 'Obfuscated email format'
+  },
+  {
+    text: 'You can reach them at jane [at] example [dot] com',
+    shouldDetect: true,
+    reason: 'Obfuscated email with brackets'
+  },
+  {
+    text: 'How do I validate email addresses in JavaScript?',
+    shouldDetect: false,
+    reason: 'Legitimate technical question'
+  },
+  {
+    text: 'What are transformer architectures?',
+    shouldDetect: false,
+    reason: 'Legitimate AI question'
+  }
+];
+
+for (const test of testCases) {
+  const result = checkContent(test.text);
+  console.assert(
+    !result.safe === test.shouldDetect,
+    `Test failed: ${test.reason}`
+  );
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Enable all detection layers" icon="shield-check">
+    Always enable obfuscated PII and intent analysis in production.
+  </Card>
+  <Card title="Use context-aware scanning" icon="brain">
+    Pass conversation history and input results to output scanner.
+  </Card>
+  <Card title="Log blocked attempts" icon="clipboard">
+    Monitor PII detection events for security auditing.
+  </Card>
+  <Card title="Test with real examples" icon="flask">
+    Use the Wisc attack and similar test cases to verify protection.
+  </Card>
+</CardGroup>
+
+<Warning>
+**Production checklist:**
+
+- [ ] PII detection enabled for both input and output
+- [ ] Obfuscated PII detection enabled
+- [ ] Intent analysis enabled
+- [ ] Context-aware scanning configured
+- [ ] Security events logged for auditing
+- [ ] Regular testing with known attack patterns
+</Warning>

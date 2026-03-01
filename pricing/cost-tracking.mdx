@@ -1,0 +1,303 @@
+---
+title: Cost Tracking & Monitoring
+description: Monitor AI spending with budgets, alerts, and spend caps
+---
+
+Cencori provides **project-level budget tracking** to help you monitor and control AI spending across your organization.
+
+## Budget Features
+
+Track and control costs with:
+
+- **Monthly Budgets** - Set soft limits for awareness
+- **Spend Caps** - Enforce hard limits to prevent overages
+- **Budget Alerts** - Automated email notifications
+- **Real-time Tracking** - Live spend updates in dashboard
+
+<Info>
+  Budgets are set per project. Each organization can have multiple projects with independent budgets.
+</Info>
+
+## Setting Up Budgets
+
+### Monthly Budget (Soft Limit)
+
+A monthly budget is a **target spending limit** that triggers alerts but doesn't block requests.
+
+**Configure in Dashboard:**
+1. Navigate to Project Settings → Budget
+2. Set "Monthly Budget" (e.g., $500)
+3. Enable "Budget Alerts"
+4. Save changes
+
+**Via API:**
+```typescript
+import { updateBudgetSettings } from '@/lib/budgets';
+
+await updateBudgetSettings(projectId, {
+  monthlyBudget: 500.00,
+  alertsEnabled: true
+});
+```
+
+### Spend Cap (Hard Limit)
+
+A spend cap is an **enforced spending limit** that blocks requests when reached.
+
+**Configure in Dashboard:**
+1. Navigate to Project Settings → Budget
+2. Set "Spend Cap" (e.g., $1000)
+3. Enable "Enforce Spend Cap"
+4. Save changes
+
+**Via API:**
+```typescript
+await updateBudgetSettings(projectId, {
+  spendCap: 1000.00,
+  enforceSpendCap: true
+});
+```
+
+<Warning>
+  When a spend cap is reached, all requests for that project will be blocked with a 402 Payment Required error until the next billing period.
+</Warning>
+
+## Budget Alerts
+
+Automatic email alerts are sent to organization owners and admins when spending crosses thresholds.
+
+### Alert Thresholds
+
+Alerts trigger at:
+- **50%** of monthly budget
+- **80%** of monthly budget  
+- **100%** of monthly budget
+
+```typescript
+// Source: lib/budgets.ts:10
+const ALERT_THRESHOLDS = [50, 80, 100];
+```
+
+### Alert Content
+
+Each alert email includes:
+- Project name
+- Current spend amount
+- Budget amount
+- Percentage used
+- Link to dashboard
+
+### Alert Frequency
+
+Alerts are sent **once per threshold per billing period** to avoid spam.
+
+```typescript
+// Source: lib/budgets.ts:143-164
+export async function checkAndSendBudgetAlerts(
+  projectId: string,
+  projectName: string,
+  organizationId: string
+): Promise<void> {
+  const status = await getBudgetStatus(projectId);
+  
+  // Skip if no budget set or alerts disabled
+  if (!status.monthlyBudget || !status.alertsEnabled) {
+    return;
+  }
+  
+  // Check each threshold and send if not already sent
+  for (const threshold of ALERT_THRESHOLDS) {
+    if (status.percentUsed >= threshold && !sentThresholds.has(threshold)) {
+      await sendBudgetAlert(/* ... */);
+    }
+  }
+}
+```
+
+<Tip>
+  Alerts are sent to organization owners and admins only. Update your notification preferences in Organization Settings.
+</Tip>
+
+## Spend Tracking
+
+### Current Month Spend
+
+Cencori tracks spending by calendar month (resets on 1st of each month).
+
+```typescript
+// Source: lib/budgets.ts:41-58
+export async function getCurrentMonthSpend(projectId: string): Promise<number> {
+  const { start, end } = getCurrentMonthRange();
+  
+  // Sum all charges for this project this month
+  const { data } = await supabase
+    .from('ai_requests')
+    .select('cencori_charge_usd')
+    .eq('project_id', projectId)
+    .gte('created_at', start.toISOString())
+    .lt('created_at', end.toISOString());
+  
+  return data?.reduce((sum, req) => sum + (req.cencori_charge_usd || 0), 0) || 0;
+}
+```
+
+### Budget Status
+
+Check your project's budget status:
+
+```typescript
+import { getBudgetStatus } from '@/lib/budgets';
+
+const status = await getBudgetStatus(projectId);
+
+console.log({
+  currentSpend: status.currentSpend,        // $127.45
+  monthlyBudget: status.monthlyBudget,      // $500.00
+  spendCap: status.spendCap,                // $1000.00
+  percentUsed: status.percentUsed,          // 25.49%
+  isCapReached: status.isCapReached,        // false
+  alertsEnabled: status.alertsEnabled       // true
+});
+```
+
+## Spend Cap Enforcement
+
+When spend cap enforcement is enabled, every request checks if the cap has been reached.
+
+```typescript
+// Source: lib/budgets.ts:108-123
+export async function checkSpendCap(projectId: string): Promise<BudgetCheckResult> {
+  const status = await getBudgetStatus(projectId);
+  
+  if (status.isCapReached) {
+    return {
+      allowed: false,
+      reason: `Spend cap of $${status.spendCap?.toFixed(2)} reached`,
+      status
+    };
+  }
+  
+  return { allowed: true, status };
+}
+```
+
+### Cap Reached Response
+
+When cap is reached, requests return:
+
+```json
+{
+  "error": {
+    "code": "spend_cap_reached",
+    "message": "Spend cap of $1000.00 reached. Current spend: $1000.23",
+    "current_spend": 1000.23,
+    "spend_cap": 1000.00
+  }
+}
+```
+
+HTTP Status: **402 Payment Required**
+
+## Cost Optimization Tips
+
+<AccordionGroup>
+  <Accordion title="Use Google Gemini for Development">
+    Gemini has 0% markup on the free tier - perfect for testing and development before switching to paid providers.
+  </Accordion>
+  
+  <Accordion title="Set Conservative Budgets">
+    Start with lower budgets and increase as needed. It's easier to raise a budget than to recoup overspend.
+  </Accordion>
+  
+  <Accordion title="Monitor Per-Project Costs">
+    Create separate projects for production, staging, and development to track costs independently.
+  </Accordion>
+  
+  <Accordion title="Enable Budget Alerts Early">
+    Set up 50% and 80% alerts to give yourself time to optimize before hitting limits.
+  </Accordion>
+  
+  <Accordion title="Review Request Logs">
+    Regularly check your request logs to identify inefficient API usage patterns or unexpected costs.
+  </Accordion>
+  
+  <Accordion title="Use Streaming for Long Responses">
+    Streaming responses provide better UX and let you stop generation early if needed, saving tokens.
+  </Accordion>
+</AccordionGroup>
+
+## Dashboard Analytics
+
+The Cencori dashboard provides:
+
+### Cost Breakdown
+- **By Provider** - See which providers cost the most
+- **By Model** - Compare costs across different models
+- **By Project** - Track spending per project/team
+- **Over Time** - Trend analysis and forecasting
+
+### Usage Metrics
+- **Total Requests** - Number of API calls
+- **Token Usage** - Input/output tokens consumed
+- **Average Cost per Request** - Efficiency metric
+- **Top Requests** - Most expensive individual calls
+
+### Real-time Monitoring
+- **Current Month Spend** - Live updating
+- **Budget Progress** - Visual progress bars
+- **Alert History** - Past notifications
+- **Spend Projection** - Estimated end-of-month total
+
+<Tip>
+  Export cost reports to CSV for accounting or share with stakeholders.
+</Tip>
+
+## Example Budget Configuration
+
+Typical setup for a production application:
+
+```typescript
+// Development project
+await updateBudgetSettings('dev-project-id', {
+  monthlyBudget: 100.00,      // Low limit for dev
+  spendCap: 150.00,           // Hard cap to prevent accidents
+  enforceSpendCap: true,      // Block at cap
+  alertsEnabled: true
+});
+
+// Production project
+await updateBudgetSettings('prod-project-id', {
+  monthlyBudget: 5000.00,     // Higher for production traffic
+  spendCap: 7500.00,          // 50% buffer over budget
+  enforceSpendCap: true,      // Block at cap for safety
+  alertsEnabled: true
+});
+
+// Experimental project
+await updateBudgetSettings('experiment-project-id', {
+  monthlyBudget: 50.00,       // Very low for experiments
+  spendCap: 75.00,            // Small buffer
+  enforceSpendCap: true,      // Definitely enforce
+  alertsEnabled: true
+});
+```
+
+## Best Practices
+
+1. **Set budgets from day one** - Don't wait until costs become a problem
+2. **Use spend caps in development** - Prevent accidental runaway costs during testing
+3. **Monitor trends weekly** - Look for unexpected spikes or increases
+4. **Alert multiple stakeholders** - Add team members to receive budget alerts
+5. **Review monthly** - Adjust budgets based on actual usage patterns
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Credits System" icon="coins" href="/pricing/credits-system">
+    Learn how credits are managed
+  </Card>
+  
+  <Card title="Pricing Overview" icon="dollar-sign" href="/pricing/overview">
+    Understand Cencori's pricing model
+  </Card>
+</CardGroup>

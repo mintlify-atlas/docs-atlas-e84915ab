@@ -1,0 +1,136 @@
+---
+title: 'API Overview'
+description: 'Introduction to Cencori AI Gateway API'
+---
+
+## Introduction
+
+The Cencori API provides a unified interface to multiple AI providers including OpenAI, Anthropic, Google Gemini, Cohere, and more. Build AI applications with automatic failover, security scanning, cost tracking, and observability.
+
+## Base URL
+
+```
+https://api.cencori.com
+```
+
+## Supported Providers
+
+Cencori supports the following AI providers:
+
+- **OpenAI** - GPT-4, GPT-3.5, DALL-E, Whisper, TTS
+- **Anthropic** - Claude 3.5 Sonnet, Claude 3 Opus
+- **Google** - Gemini 2.0 Flash, Gemini Pro, Imagen
+- **Cohere** - Command, Embed models
+- **Groq** - Fast inference models
+- **DeepSeek** - DeepSeek models
+- **xAI** - Grok models
+- **Mistral** - Mistral models
+- **Together AI** - Open source models
+- **OpenRouter** - Multi-provider access
+- **Perplexity** - Perplexity models
+
+## Key Features
+
+### Multi-Provider Support
+Use a single API to access multiple AI providers. Switch providers by changing the model name.
+
+### Automatic Failover
+When a provider fails, Cencori automatically retries with fallback providers to ensure high availability.
+
+### Security Layer
+- Input scanning for prompt injection, jailbreaks, and PII
+- Output filtering for sensitive data leakage
+- Content moderation integration
+- Custom data rules (mask, redact, tokenize)
+
+### Observability
+- Request logs with full traces
+- Token usage tracking
+- Cost breakdown by provider
+- Latency monitoring
+- Security incident tracking
+
+### Rate Limiting & Budgets
+- Configurable rate limits per project
+- Spend caps to control costs
+- Credit-based billing for pay-as-you-go
+
+### Memory & RAG
+- Vector memory storage with semantic search
+- Built-in embeddings generation
+- RAG endpoint with context injection
+
+## Authentication
+
+All API requests require authentication using an API key. See [Authentication](/api/authentication) for details.
+
+## Error Handling
+
+Cencori uses standard HTTP status codes and returns structured error responses. See [Error Codes](/api/errors) for details.
+
+## Endpoints
+
+### Chat Completions
+`POST /api/ai/chat` - Generate chat completions with streaming support
+
+### Embeddings
+`POST /api/ai/embeddings` - Generate vector embeddings
+
+### Image Generation
+`POST /api/ai/images/generate` - Generate images from text prompts
+
+### Audio Transcription
+`POST /api/ai/audio/transcriptions` - Convert speech to text
+
+### Audio Speech
+`POST /api/ai/audio/speech` - Convert text to speech
+
+### Moderation
+`POST /api/ai/moderation` - Content moderation and safety checks
+
+### RAG
+`POST /api/ai/rag` - Retrieval-augmented generation with memory search
+
+## SDK Support
+
+Cencori is compatible with OpenAI SDKs. Just change the base URL:
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+```
+
+## Rate Limits
+
+Rate limits vary by subscription tier:
+
+- **Free**: 1,000 requests/month
+- **Pro**: 50,000 requests/month
+- **Enterprise**: Custom limits
+
+Rate limit headers are included in all responses:
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1234567890
+```
+
+## Versioning
+
+The Cencori API is versioned. The current version is `v1`. Version is included in the URL:
+
+```
+https://api.cencori.com/v1/chat/completions
+```
+
+## Support
+
+For API support:
+- Documentation: https://docs.cencori.com
+- Email: support@cencori.com
+- Discord: https://discord.gg/cencori

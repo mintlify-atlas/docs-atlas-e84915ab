@@ -1,122 +1,220 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Cencori",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#3b82f6",
+    "light": "#60a5fa",
+    "dark": "#1e40af"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/cencori/cencori"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/cencori/cencori"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "authentication"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/five-primitives",
+              "concepts/ai-gateway",
+              "concepts/compute",
+              "concepts/workflow",
+              "concepts/storage",
+              "concepts/integrations"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/streaming",
+              "guides/multi-provider",
+              "guides/rag-memory",
+              "guides/error-handling",
+              "guides/rate-limiting",
+              "guides/cost-optimization"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Security",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "security/overview",
+              "security/api-keys",
+              "security/pii-detection",
+              "security/content-filtering"
+            ]
+          },
+          {
+            "group": "Pricing & Billing",
+            "pages": [
+              "pricing/overview",
+              "pricing/credits-system",
+              "pricing/cost-tracking"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "api/overview",
+              "api/authentication",
+              "api/errors"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "AI Gateway",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/chat",
+              "api/embeddings",
+              "api/image-generation",
+              "api/audio-transcription",
+              "api/audio-speech",
+              "api/moderation",
+              "api/rag"
+            ]
+          },
+          {
+            "group": "Memory & Storage",
+            "pages": [
+              "api/memory-store",
+              "api/memory-search"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "api/projects",
+              "api/api-keys",
+              "api/usage",
+              "api/logs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "sdks/overview",
+              "sdks/installation"
+            ]
+          },
+          {
+            "group": "TypeScript/JavaScript",
+            "pages": [
+              "sdks/typescript/quickstart",
+              "sdks/typescript/chat",
+              "sdks/typescript/streaming",
+              "sdks/typescript/memory",
+              "sdks/typescript/error-handling"
+            ]
+          },
+          {
+            "group": "Python",
+            "pages": [
+              "sdks/python/quickstart",
+              "sdks/python/chat",
+              "sdks/python/streaming",
+              "sdks/python/memory",
+              "sdks/python/error-handling"
+            ]
+          },
+          {
+            "group": "Go",
+            "pages": [
+              "sdks/go/quickstart",
+              "sdks/go/chat",
+              "sdks/go/streaming",
+              "sdks/go/memory",
+              "sdks/go/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Security Scanner",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "scan/introduction",
+              "scan/installation"
+            ]
+          },
+          {
+            "group": "Usage",
+            "pages": [
+              "scan/cli-usage",
+              "scan/ai-autofix",
+              "scan/changelog-generation",
+              "scan/ci-cd-integration"
+            ]
+          },
+          {
+            "group": "Detection Rules",
+            "pages": [
+              "scan/secrets-detection",
+              "scan/pii-detection",
+              "scan/vulnerability-detection",
+              "scan/security-scoring"
+            ]
+          },
+          {
+            "group": "Web Dashboard",
+            "pages": [
+              "scan/web-scanner",
+              "scan/github-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Framework Support",
+            "pages": [
+              "integrations/vercel-ai-sdk",
+              "integrations/langchain",
+              "integrations/crewai",
+              "integrations/autogen"
+            ]
+          },
+          {
+            "group": "Model Providers",
+            "pages": [
+              "integrations/openai",
+              "integrations/anthropic",
+              "integrations/google-gemini",
+              "integrations/custom-providers"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

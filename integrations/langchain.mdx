@@ -1,0 +1,231 @@
+---
+title: 'LangChain Integration'
+description: 'Use Cencori with LangChain for building AI agents and chains'
+---
+
+# LangChain Integration
+
+Cencori works seamlessly with LangChain by configuring it to use Cencori's AI Gateway as the base URL. This gives you full observability, security, and cost tracking for all your LangChain applications.
+
+## How It Works
+
+LangChain's `ChatOpenAI` class accepts a `base_url` parameter. Point it to Cencori's gateway and all your LangChain calls will flow through Cencori with automatic logging, safety filtering, and analytics.
+
+## Setup
+
+<Steps>
+  <Step title="Install LangChain">
+    Install the LangChain Python package:
+
+    ```bash
+    pip install langchain langchain-openai
+    ```
+  </Step>
+
+  <Step title="Add provider API keys to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard), add your provider API keys:
+    
+    - Go to **Settings** > **Providers**
+    - Add your OpenAI, Anthropic, or Google API key
+    - Cencori will route requests to these providers using your keys
+  </Step>
+
+  <Step title="Configure LangChain">
+    Set the `base_url` parameter to point to Cencori:
+
+    ```python
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(
+        base_url="https://api.cencori.com/v1",
+        api_key="csk_your_cencori_key",
+        model="gpt-4o"
+    )
+    ```
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Basic Chat
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="gpt-4o"
+)
+
+messages = [
+    HumanMessage(content="What is the capital of France?")
+]
+
+response = llm.invoke(messages)
+print(response.content)
+```
+
+### Chains
+
+Use Cencori with LangChain Expression Language (LCEL):
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="claude-3-opus"
+)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}")
+])
+
+chain = prompt | llm | StrOutputParser()
+
+result = chain.invoke({"input": "Tell me a joke"})
+print(result)
+```
+
+### Agents
+
+Build LangChain agents with Cencori as the LLM provider:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_openai_functions_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.tools import tool
+
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="gpt-4o"
+)
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the weather for a location."""
+    return f"The weather in {location} is sunny."
+
+tools = [get_weather]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}"),
+    MessagesPlaceholder("agent_scratchpad"),
+])
+
+agent = create_openai_functions_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+result = agent_executor.invoke({
+    "input": "What's the weather in Paris?"
+})
+print(result["output"])
+```
+
+### Streaming
+
+Stream responses for real-time output:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="gpt-4o",
+    streaming=True
+)
+
+messages = [HumanMessage(content="Write a poem about AI")]
+
+for chunk in llm.stream(messages):
+    print(chunk.content, end="", flush=True)
+```
+
+## Supported Models
+
+Use any model available through Cencori:
+
+<CodeGroup>
+```python OpenAI
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="gpt-4o"  # or gpt-4o-mini, o3, o1
+)
+```
+
+```python Anthropic
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="claude-3-opus"  # or claude-3-sonnet
+)
+```
+
+```python Google Gemini
+llm = ChatOpenAI(
+    base_url="https://api.cencori.com/v1",
+    api_key="csk_your_cencori_key",
+    model="gemini-2.5-flash"  # or gemini-3-pro
+)
+```
+</CodeGroup>
+
+## Environment Variables
+
+For cleaner code, use environment variables:
+
+```bash .env
+CENCORI_API_KEY=csk_your_cencori_key
+CENCORI_BASE_URL=https://api.cencori.com/v1
+```
+
+```python
+import os
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    base_url=os.getenv("CENCORI_BASE_URL"),
+    api_key=os.getenv("CENCORI_API_KEY"),
+    model="gpt-4o"
+)
+```
+
+## What You Get
+
+By routing LangChain through Cencori, you automatically get:
+
+- **Observability** — View all LangChain calls in your Cencori dashboard
+- **Security** — Automatic PII detection and content filtering
+- **Cost Tracking** — Real-time cost monitoring per request
+- **Audit Logs** — Complete history of prompts and responses
+- **Multi-Provider** — Switch between OpenAI, Anthropic, and Gemini
+- **Failover** — Automatic fallback if a provider is down
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="LangChain Docs" icon="arrow-up-right-from-square" href="https://python.langchain.com/docs/">
+    Official LangChain documentation
+  </Card>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn more about Cencori's AI Gateway
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your LangChain usage
+  </Card>
+  <Card title="Provider Setup" icon="key" href="/integrations/openai">
+    Configure provider API keys
+  </Card>
+</CardGroup>

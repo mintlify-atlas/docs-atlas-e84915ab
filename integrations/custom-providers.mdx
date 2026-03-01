@@ -1,0 +1,341 @@
+---
+title: 'Custom Provider Configuration'
+description: 'Add custom OpenAI-compatible or Anthropic-compatible providers to Cencori'
+---
+
+# Custom Provider Configuration
+
+Cencori supports custom AI providers that implement OpenAI-compatible or Anthropic-compatible APIs. This allows you to use local models, private deployments, or alternative providers through Cencori's gateway.
+
+## How It Works
+
+Custom providers work by:
+
+1. Accepting a base URL for your provider's API
+2. Formatting requests in either OpenAI or Anthropic format
+3. Routing requests through Cencori for observability and security
+4. Normalizing responses to Cencori's unified format
+
+## Adding a Custom Provider
+
+<Steps>
+  <Step title="Get your provider details">
+    Collect the following information:
+    
+    - **Base URL**: The API endpoint (e.g., `https://api.example.com`)
+    - **API Key**: Your provider's API key (optional)
+    - **Format**: Whether it's OpenAI-compatible or Anthropic-compatible
+    - **Model IDs**: The model identifiers your provider supports
+  </Step>
+
+  <Step title="Add provider to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    1. Go to **Settings** > **Providers**
+    2. Click **Add Provider**
+    3. Select **Custom Provider**
+    4. Fill in the details:
+       - Name: A friendly name for your provider
+       - Base URL: Your provider's API endpoint
+       - API Key: Your authentication key (if required)
+       - Format: `openai` or `anthropic`
+    5. Click **Test Connection**
+    6. Click **Save**
+  </Step>
+
+  <Step title="Use your custom provider">
+    Use your custom provider like any other:
+
+    ```typescript
+    const response = await cencori.ai.chat({
+      model: 'your-custom-model',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
+    ```
+  </Step>
+</Steps>
+
+## Supported Provider Types
+
+### OpenAI-Compatible Providers
+
+These providers implement the OpenAI Chat Completions API:
+
+- **Local Models**: Ollama, LM Studio, LocalAI
+- **Cloud Providers**: Together AI, Groq, Anyscale
+- **Custom Deployments**: Self-hosted vLLM, FastAPI wrappers
+- **Azure OpenAI**: Microsoft's hosted OpenAI models
+
+### Anthropic-Compatible Providers
+
+Providers that implement Anthropic's Messages API:
+
+- **AWS Bedrock**: Claude models on AWS
+- **Custom Deployments**: Self-hosted Claude-compatible APIs
+
+## Configuration Examples
+
+### Ollama (Local)
+
+Run models locally with Ollama:
+
+```typescript
+// In Cencori Dashboard:
+Name: Ollama Local
+Base URL: http://localhost:11434/v1
+Format: openai
+API Key: (leave empty)
+```
+
+```typescript
+// Usage
+const response = await cencori.ai.chat({
+  model: 'llama2',  // or mistral, codellama, etc.
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### Together AI
+
+Use Together AI's hosted models:
+
+```typescript
+// In Cencori Dashboard:
+Name: Together AI
+Base URL: https://api.together.xyz/v1
+Format: openai
+API Key: your_together_api_key
+```
+
+```typescript
+// Usage
+const response = await cencori.ai.chat({
+  model: 'mistralai/Mixtral-8x7B-Instruct-v0.1',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### Groq
+
+Use Groq's ultra-fast inference:
+
+```typescript
+// In Cencori Dashboard:
+Name: Groq
+Base URL: https://api.groq.com/openai/v1
+Format: openai
+API Key: your_groq_api_key
+```
+
+```typescript
+// Usage
+const response = await cencori.ai.chat({
+  model: 'llama-3.3-70b-versatile',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### Azure OpenAI
+
+Use Azure's hosted OpenAI models:
+
+```typescript
+// In Cencori Dashboard:
+Name: Azure OpenAI
+Base URL: https://your-resource.openai.azure.com/openai/deployments/your-deployment
+Format: openai
+API Key: your_azure_api_key
+```
+
+### LM Studio (Local)
+
+Run models locally with LM Studio:
+
+```typescript
+// In Cencori Dashboard:
+Name: LM Studio
+Base URL: http://localhost:1234/v1
+Format: openai
+API Key: (leave empty)
+```
+
+## Usage Examples
+
+### Using the SDK
+
+<CodeGroup>
+```typescript TypeScript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+// Use your custom provider
+const response = await cencori.ai.chat({
+  model: 'your-custom-model',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+console.log(response.content);
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_your_key")
+
+response = cencori.ai.chat(
+    model="your-custom-model",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.content)
+```
+</CodeGroup>
+
+### With Vercel AI SDK
+
+```typescript
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: cencori('your-custom-model'),
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+## Advanced Configuration
+
+### Custom Headers
+
+Add custom headers for authentication or routing:
+
+```typescript
+// Configure in Dashboard:
+Headers:
+  X-Custom-Header: value
+  X-API-Version: v1
+```
+
+### Pricing Configuration
+
+Set custom pricing for cost tracking:
+
+```typescript
+// In Dashboard:
+Input Cost: $0.001 per 1K tokens
+Output Cost: $0.002 per 1K tokens
+```
+
+### Timeout Configuration
+
+Set request timeout (default: 30s):
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'your-custom-model',
+  messages: [{ role: 'user', content: 'Hello!' }],
+  timeout: 60000  // 60 seconds
+});
+```
+
+## Testing Your Provider
+
+Use the test connection feature:
+
+<Steps>
+  <Step title="Go to provider settings">
+    Navigate to **Settings** > **Providers** > Your Custom Provider
+  </Step>
+
+  <Step title="Click Test Connection">
+    Cencori will send a test request to verify:
+    - Base URL is reachable
+    - API key is valid (if required)
+    - Response format is compatible
+  </Step>
+
+  <Step title="Review results">
+    You'll see success or error messages indicating if the provider is configured correctly.
+  </Step>
+</Steps>
+
+## What You Get
+
+Custom providers get all Cencori features:
+
+<CardGroup cols={2}>
+  <Card title="Observability" icon="chart-line">
+    Track all requests in your dashboard
+  </Card>
+  <Card title="Security" icon="shield">
+    Automatic PII detection and filtering
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign">
+    Monitor costs with custom pricing
+  </Card>
+  <Card title="Audit Logs" icon="file-lines">
+    Complete request/response history
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Connection Failed
+
+If connection tests fail:
+
+1. Verify the base URL is correct and accessible
+2. Check that the API key is valid (if required)
+3. Ensure your provider implements the correct API format
+4. Check firewall/network settings if using local providers
+
+### Incompatible Format
+
+If you see format errors:
+
+1. Verify you selected the correct format (OpenAI vs Anthropic)
+2. Check your provider's API documentation
+3. Test the provider directly with curl to verify responses
+
+### Model Not Found
+
+If the model isn't recognized:
+
+1. Verify the model ID is correct for your provider
+2. Check that the model is available/loaded (for local providers)
+3. Consult your provider's model list
+
+## Security Considerations
+
+### Local Providers
+
+- Use `http://localhost` or `http://127.0.0.1` for local-only access
+- Don't expose local servers to the internet
+- Use API keys even for local providers when possible
+
+### Cloud Providers
+
+- Always use HTTPS for base URLs
+- Rotate API keys regularly
+- Use environment variables for sensitive data
+- Monitor usage in both Cencori and provider dashboards
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about the AI Gateway
+  </Card>
+  <Card title="Provider Setup" icon="key" href="/integrations/openai">
+    Configure standard providers
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    Manage your providers
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full API documentation
+  </Card>
+</CardGroup>

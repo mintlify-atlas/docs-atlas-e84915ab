@@ -1,0 +1,290 @@
+---
+title: AI Gateway
+description: Secure, unified API for all AI models with multi-provider routing and real-time streaming
+---
+
+The AI Gateway is Cencori's secure, unified API for all AI models. It provides a single endpoint that routes to OpenAI, Anthropic, Google, and 10+ other providers, with built-in security filtering, audit logging, and automatic failover.
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Multi-provider routing" icon="route">
+    One API for OpenAI, Anthropic, Gemini, Llama, and more
+  </Card>
+  <Card title="Security layer" icon="shield-check">
+    PII detection, prompt injection protection, content filtering
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Complete audit logs, latency tracking, cost attribution
+  </Card>
+  <Card title="Streaming" icon="rss">
+    Real-time SSE with token counting and error handling
+  </Card>
+</CardGroup>
+
+## How it works
+
+The gateway sits between your application and AI providers, handling routing, security, and observability:
+
+```typescript
+import { Cencori } from '@cencori/sdk';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Explain quantum computing' }]
+});
+```
+
+Behind the scenes, Cencori:
+1. **Authenticates** the request using your API key
+2. **Routes** to the correct provider based on the model name
+3. **Filters** input for security threats (PII, prompt injection)
+4. **Calls** the provider's API with your BYOK or Cencori's key
+5. **Filters** output for security issues
+6. **Logs** the request for audit and cost tracking
+7. **Returns** the response to your application
+
+## Multi-provider routing
+
+The gateway automatically routes requests to the correct provider based on the model name. This is implemented in `lib/providers/router.ts:28`:
+
+```typescript
+detectProvider(modelName: string): string {
+  // OpenAI models
+  if (modelName.startsWith('gpt-') || modelName.startsWith('o1-')) {
+    return 'openai';
+  }
+  
+  // Anthropic models
+  if (modelName.startsWith('claude-')) {
+    return 'anthropic';
+  }
+  
+  // Google models
+  if (modelName.startsWith('gemini-')) {
+    return 'google';
+  }
+  
+  // ... and 10+ more providers
+}
+```
+
+### Supported providers
+
+| Provider | Model Prefix | Example |
+|----------|-------------|----------|
+| OpenAI | `gpt-`, `o1-` | `gpt-4o`, `o1-preview` |
+| Anthropic | `claude-` | `claude-3-5-sonnet-20241022` |
+| Google | `gemini-` | `gemini-1.5-flash` |
+| Groq | `llama-`, `mixtral-` | `llama-3.3-70b-versatile` |
+| xAI | `grok-` | `grok-4` |
+| DeepSeek | `deepseek-` | `deepseek-chat` |
+| Mistral | `mistral-` | `mistral-large-latest` |
+| Cohere | `command-` | `command-r-plus` |
+
+<Info>
+  You can also use explicit provider prefixes like `openai/gpt-4o` or bring your own custom providers.
+</Info>
+
+## Security layer
+
+Every request passes through multiple security checks before reaching the AI provider.
+
+### Input filtering
+
+The gateway scans all user messages for security threats:
+
+- **PII detection**: Identifies emails, phone numbers, SSNs, credit cards
+- **Prompt injection**: Detects jailbreak attempts and instruction leakage
+- **Harmful content**: Blocks dangerous or malicious prompts
+
+Security incidents are logged to the `security_incidents` table with full context:
+
+```sql
+CREATE TABLE security_incidents (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  incident_type TEXT CHECK (incident_type IN (
+    'jailbreak', 'pii_input', 'pii_output',
+    'harmful_content', 'instruction_leakage',
+    'prompt_injection', 'multi_vector'
+  )),
+  severity TEXT CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  risk_score DECIMAL(3,2),
+  details JSONB,
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### Custom data rules
+
+You can define custom rules to mask, redact, or block sensitive patterns:
+
+```typescript
+const { inputResult } = await processCustomRules(inputText, rules);
+
+if (inputResult.shouldBlock) {
+  return new NextResponse(
+    JSON.stringify({ error: 'Request blocked by custom rule' }),
+    { status: 400 }
+  );
+}
+```
+
+See `app/api/ai/chat/route.ts:38` for the full implementation.
+
+## Automatic failover
+
+The gateway includes circuit breaker logic and automatic failover to prevent cascading failures.
+
+### Circuit breaker
+
+Implemented in `lib/providers/circuit-breaker.ts:120`, the circuit breaker tracks provider health:
+
+```typescript
+if (await isCircuitOpen(providerName)) {
+  console.log(`Circuit open for ${providerName}, skipping...`);
+  continue; // Try next provider
+}
+```
+
+Circuit states:
+- **Closed**: Provider is healthy, requests go through
+- **Open**: Provider failed 5+ times, block all requests for 60s
+- **Half-open**: Test request to check if provider recovered
+
+### Failover chains
+
+When a provider fails, the gateway automatically tries fallback providers defined in `lib/providers/failover.ts:12`:
+
+```typescript
+const FALLBACK_CHAINS: Record<string, string[]> = {
+  'openai': ['anthropic', 'google', 'groq', 'mistral'],
+  'anthropic': ['openai', 'google', 'groq', 'mistral'],
+  'google': ['openai', 'anthropic', 'groq', 'mistral'],
+};
+```
+
+Models are automatically mapped to equivalent models on fallback providers:
+
+```typescript
+const MODEL_MAPPINGS: Record<string, Record<string, string>> = {
+  'gpt-4o': { 'anthropic': 'claude-sonnet-4', 'google': 'gemini-2.5-flash' },
+  'claude-opus-4': { 'openai': 'gpt-5', 'google': 'gemini-3-pro' },
+};
+```
+
+<Note>
+  Failover is transparent to your application. You'll receive a response from the fallback provider without any code changes.
+</Note>
+
+## Streaming support
+
+The gateway supports real-time streaming with Server-Sent Events (SSE):
+
+```typescript
+const stream = await cencori.ai.stream({
+  model: 'claude-3-5-sonnet-20241022',
+  messages: [{ role: 'user', content: 'Write a haiku' }]
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.delta);
+}
+```
+
+Implementation in `lib/providers/anthropic.ts:86`:
+
+```typescript
+async *stream(request: UnifiedChatRequest): AsyncGenerator<StreamChunk> {
+  const stream = await this.client.messages.create({
+    model: request.model,
+    max_tokens: request.maxTokens ?? 4096,
+    messages,
+    stream: true,
+  });
+  
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta') {
+      yield { delta: event.delta.text };
+    }
+  }
+}
+```
+
+## Audit logging
+
+Every request is logged to the `api_gateway_request_logs` table for compliance and debugging:
+
+```sql
+CREATE TABLE api_gateway_request_logs (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  endpoint TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  ip_address TEXT,
+  country_code TEXT,
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+AI-specific requests are also logged to `ai_requests` with token usage and cost:
+
+```sql
+CREATE TABLE ai_requests (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL,
+  model TEXT NOT NULL,
+  prompt_tokens INTEGER NOT NULL,
+  completion_tokens INTEGER NOT NULL,
+  cost_usd DECIMAL(10, 6) NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  status TEXT CHECK (status IN ('success', 'error', 'filtered')),
+  created_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+## Cost tracking
+
+The gateway calculates cost in real-time based on token usage and model pricing:
+
+```typescript
+const providerCost = this.calculateCost(
+  usage.prompt_tokens,
+  usage.completion_tokens,
+  pricing
+);
+
+const cencoriCharge = this.applyMarkup(
+  providerCost,
+  pricing.cencoriMarkupPercentage
+);
+```
+
+See `lib/providers/base.ts:157` for the cost calculation implementation.
+
+## Entry point
+
+The AI Gateway is accessible at:
+
+```
+POST /api/ai/chat
+```
+
+Implementation: `app/api/ai/chat/route.ts`
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Make your first request" icon="rocket" href="/quickstart">
+    Get started with the AI Gateway in 2 minutes
+  </Card>
+  <Card title="Security settings" icon="shield" href="/security">
+    Configure custom security rules for your project
+  </Card>
+</CardGroup>

@@ -1,0 +1,523 @@
+---
+title: Rate Limiting Implementation
+description: Implement rate limiting with Redis, handle 429 errors, and optimize request throughput
+---
+
+# Rate Limiting Implementation
+
+Cencori implements rate limiting at multiple levels to ensure fair usage and prevent service degradation.
+
+## How Rate Limiting Works
+
+Rate limits are enforced using Redis with a sliding window algorithm:
+
+```typescript lib/rate-limit.ts
+import { Redis } from '@upstash/redis';
+
+const RATE_LIMIT_WINDOW = 60; // 1 minute in seconds
+const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per minute
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+});
+
+export interface RateLimitResult {
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset: number; // Timestamp when the window resets
+}
+
+export async function checkRateLimit(projectId: string): Promise<RateLimitResult> {
+  const key = `rate_limit:${projectId}`;
+  const now = Date.now();
+
+  try {
+    // Atomic increment
+    const requests = await redis.incr(key);
+
+    // Set expiration if it's a new key (first request)
+    if (requests === 1) {
+      await redis.expire(key, RATE_LIMIT_WINDOW);
+    }
+
+    // Get TTL to return accurate reset time
+    const ttl = await redis.ttl(key);
+
+    const remaining = Math.max(0, MAX_REQUESTS_PER_WINDOW - requests);
+    const reset = now + (ttl * 1000);
+
+    return {
+      success: requests <= MAX_REQUESTS_PER_WINDOW,
+      limit: MAX_REQUESTS_PER_WINDOW,
+      remaining,
+      reset
+    };
+  } catch (error) {
+    console.error('[Rate Limit] Redis error:', error);
+    // Fail open to avoid blocking users during outage
+    return {
+      success: true,
+      limit: MAX_REQUESTS_PER_WINDOW,
+      remaining: 1,
+      reset: now + (RATE_LIMIT_WINDOW * 1000)
+    };
+  }
+}
+```
+
+## Rate Limit Tiers
+
+Cencori enforces different rate limits based on subscription tier:
+
+| Tier | Requests/Min | Requests/Month |
+|------|--------------|----------------|
+| Free | 10 | 1,000 |
+| Pro | 60 | 50,000 |
+| Enterprise | Custom | Unlimited |
+
+## Checking Rate Limits
+
+The API returns rate limit information in response headers:
+
+```bash
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 59
+X-RateLimit-Reset: 1234567890
+```
+
+## Handling Rate Limit Errors
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Cencori, RateLimitError } from '@cencori/sdk';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+async function chatWithRateLimit(message: string) {
+  try {
+    const response = await cencori.ai.chat({
+      messages: [{ role: 'user', content: message }],
+      model: 'gpt-4o'
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      // Extract retry time from error
+      const retryAfter = error.statusCode === 429 
+        ? 60000 // Default to 60 seconds
+        : 0;
+      
+      console.log(`Rate limited. Retrying after ${retryAfter}ms`);
+      
+      // Wait and retry
+      await new Promise(resolve => setTimeout(resolve, retryAfter));
+      return chatWithRateLimit(message);
+    }
+    throw error;
+  }
+}
+```
+
+```python Python
+from cencori import Cencori
+from cencori.errors import RateLimitError
+import time
+
+cencori = Cencori(api_key="your-api-key")
+
+def chat_with_rate_limit(message: str):
+    try:
+        response = cencori.ai.chat(
+            messages=[{"role": "user", "content": message}],
+            model="gpt-4o"
+        )
+        return response
+    except RateLimitError as e:
+        retry_after = 60  # Default to 60 seconds
+        print(f"Rate limited. Retrying after {retry_after}s")
+        time.sleep(retry_after)
+        return chat_with_rate_limit(message)
+```
+
+</CodeGroup>
+
+## Exponential Backoff
+
+Implement exponential backoff for better rate limit handling:
+
+```typescript
+class RateLimitHandler {
+  private backoffMultiplier = 2;
+  private maxRetries = 5;
+  private initialDelay = 1000;
+
+  async executeWithBackoff<T>(
+    fn: () => Promise<T>
+  ): Promise<T> {
+    let delay = this.initialDelay;
+
+    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (!(error instanceof RateLimitError)) {
+          throw error;
+        }
+
+        if (attempt === this.maxRetries - 1) {
+          throw error;
+        }
+
+        console.log(
+          `Rate limited. Attempt ${attempt + 1}/${this.maxRetries}. ` +
+          `Waiting ${delay}ms before retry...`
+        );
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= this.backoffMultiplier;
+      }
+    }
+
+    throw new Error('Max retries exceeded');
+  }
+}
+
+// Usage
+const handler = new RateLimitHandler();
+
+const response = await handler.executeWithBackoff(() =>
+  cencori.ai.chat({
+    messages: [{ role: 'user', content: 'Hello' }],
+    model: 'gpt-4o'
+  })
+);
+```
+
+## Request Queuing
+
+Queue requests to stay within rate limits:
+
+```typescript
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private requestsPerWindow = 60;
+  private windowMs = 60000;
+  private requestTimes: number[] = [];
+
+  async enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue() {
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      // Remove old timestamps outside the window
+      const now = Date.now();
+      this.requestTimes = this.requestTimes.filter(
+        time => now - time < this.windowMs
+      );
+
+      // Check if we can make a request
+      if (this.requestTimes.length >= this.requestsPerWindow) {
+        // Wait until oldest request falls outside window
+        const oldestRequest = this.requestTimes[0];
+        const waitTime = this.windowMs - (now - oldestRequest) + 100;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+
+      // Process next request
+      const request = this.queue.shift();
+      if (request) {
+        this.requestTimes.push(Date.now());
+        await request();
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
+// Usage
+const queue = new RequestQueue();
+
+for (let i = 0; i < 100; i++) {
+  queue.enqueue(() =>
+    cencori.ai.chat({
+      messages: [{ role: 'user', content: `Message ${i}` }],
+      model: 'gpt-4o'
+    })
+  ).then(response => {
+    console.log(`Response ${i}:`, response.content);
+  });
+}
+```
+
+## Token Bucket Algorithm
+
+Implement a token bucket for burst handling:
+
+```typescript
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+
+  constructor(
+    private capacity: number,
+    private refillRate: number // tokens per second
+  ) {
+    this.tokens = capacity;
+    this.lastRefill = Date.now();
+  }
+
+  private refill() {
+    const now = Date.now();
+    const timePassed = (now - this.lastRefill) / 1000;
+    const tokensToAdd = timePassed * this.refillRate;
+
+    this.tokens = Math.min(this.capacity, this.tokens + tokensToAdd);
+    this.lastRefill = now;
+  }
+
+  async consume(tokens: number = 1): Promise<boolean> {
+    this.refill();
+
+    if (this.tokens >= tokens) {
+      this.tokens -= tokens;
+      return true;
+    }
+
+    // Wait for tokens to be available
+    const tokensNeeded = tokens - this.tokens;
+    const waitTime = (tokensNeeded / this.refillRate) * 1000;
+
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    this.tokens = 0;
+    return true;
+  }
+
+  getAvailableTokens(): number {
+    this.refill();
+    return Math.floor(this.tokens);
+  }
+}
+
+// Usage: 60 requests per minute = 1 request per second
+const bucket = new TokenBucket(60, 1);
+
+async function rateLimitedRequest() {
+  await bucket.consume(1);
+  return cencori.ai.chat({
+    messages: [{ role: 'user', content: 'Hello' }],
+    model: 'gpt-4o'
+  });
+}
+```
+
+## Per-User Rate Limiting
+
+Implement rate limiting per end user:
+
+```typescript
+const userBuckets = new Map<string, TokenBucket>();
+
+function getUserBucket(userId: string): TokenBucket {
+  if (!userBuckets.has(userId)) {
+    userBuckets.set(userId, new TokenBucket(10, 0.1)); // 10 requests per 100 seconds
+  }
+  return userBuckets.get(userId)!;
+}
+
+async function chatForUser(userId: string, message: string) {
+  const bucket = getUserBucket(userId);
+  
+  const available = bucket.getAvailableTokens();
+  if (available === 0) {
+    throw new RateLimitError(
+      `User ${userId} has exceeded rate limit. Please wait.`
+    );
+  }
+
+  await bucket.consume(1);
+
+  return cencori.ai.chat({
+    messages: [{ role: 'user', content: message }],
+    model: 'gpt-4o',
+    userId
+  });
+}
+```
+
+## Rate Limit Middleware
+
+Implement rate limiting as middleware:
+
+```typescript
+function rateLimitMiddleware(
+  requestsPerMinute: number = 60
+) {
+  const buckets = new Map<string, TokenBucket>();
+
+  return async (req: Request, next: () => Promise<Response>) => {
+    const projectId = req.headers.get('X-Project-ID');
+    if (!projectId) {
+      return new Response('Missing project ID', { status: 400 });
+    }
+
+    if (!buckets.has(projectId)) {
+      buckets.set(
+        projectId,
+        new TokenBucket(requestsPerMinute, requestsPerMinute / 60)
+      );
+    }
+
+    const bucket = buckets.get(projectId)!;
+    const available = bucket.getAvailableTokens();
+
+    if (available === 0) {
+      return new Response('Rate limit exceeded', {
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': requestsPerMinute.toString(),
+          'X-RateLimit-Remaining': '0',
+          'Retry-After': '60'
+        }
+      });
+    }
+
+    await bucket.consume(1);
+
+    const response = await next();
+
+    response.headers.set('X-RateLimit-Limit', requestsPerMinute.toString());
+    response.headers.set('X-RateLimit-Remaining', bucket.getAvailableTokens().toString());
+
+    return response;
+  };
+}
+```
+
+## Monitoring Rate Limits
+
+Track rate limit metrics:
+
+```typescript
+class RateLimitMonitor {
+  private metrics = {
+    totalRequests: 0,
+    rateLimitedRequests: 0,
+    averageWaitTime: 0
+  };
+
+  recordRequest() {
+    this.metrics.totalRequests++;
+  }
+
+  recordRateLimit(waitTime: number) {
+    this.metrics.rateLimitedRequests++;
+    
+    // Update average wait time
+    const totalWait = 
+      this.metrics.averageWaitTime * (this.metrics.rateLimitedRequests - 1) +
+      waitTime;
+    this.metrics.averageWaitTime = 
+      totalWait / this.metrics.rateLimitedRequests;
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics,
+      rateLimitRate: 
+        (this.metrics.rateLimitedRequests / this.metrics.totalRequests) * 100
+    };
+  }
+}
+
+const monitor = new RateLimitMonitor();
+
+try {
+  monitor.recordRequest();
+  await cencori.ai.chat({ messages, model: 'gpt-4o' });
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    monitor.recordRateLimit(60000);
+  }
+}
+```
+
+## Best Practices
+
+<Steps>
+
+1. **Implement Exponential Backoff**
+   
+   Always use exponential backoff when retrying rate-limited requests.
+
+2. **Cache Responses**
+   
+   Cache responses to reduce API calls:
+   ```typescript
+   const cache = new Map<string, any>();
+   const cacheKey = JSON.stringify({ messages, model });
+   
+   if (cache.has(cacheKey)) {
+     return cache.get(cacheKey);
+   }
+   
+   const response = await cencori.ai.chat({ messages, model });
+   cache.set(cacheKey, response);
+   ```
+
+3. **Batch Requests**
+   
+   Combine multiple requests when possible to reduce API calls.
+
+4. **Monitor Usage**
+   
+   Track your rate limit usage and set up alerts before hitting limits.
+
+5. **Upgrade Tier**
+   
+   If you consistently hit rate limits, upgrade to a higher tier.
+
+</Steps>
+
+## Provider-Specific Limits
+
+Each AI provider has their own rate limits:
+
+| Provider | Requests/Min | Tokens/Min |
+|----------|--------------|------------|
+| OpenAI GPT-4 | 500 | 30,000 |
+| OpenAI GPT-3.5 | 3,500 | 90,000 |
+| Anthropic Claude | 50 | 40,000 |
+| Google Gemini | 60 | 32,000 |
+
+Cencori automatically handles provider rate limits with failover.
+
+## Next Steps
+
+- [Error Handling](/guides/error-handling) - Handle rate limit errors gracefully
+- [Multi-Provider](/guides/multi-provider) - Use multiple providers to increase throughput
+- [Cost Optimization](/guides/cost-optimization) - Balance rate limits with costs

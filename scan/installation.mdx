@@ -1,0 +1,218 @@
+---
+title: Installation
+description: Install Cencori Scan globally, use with npx, or add as a project dependency
+---
+
+# Installation
+
+Cencori Scan can be used in three ways: directly with `npx` (recommended), installed globally, or as a project dependency.
+
+## Recommended: npx (No Installation)
+
+The fastest way to use Cencori Scan is with `npx`:
+
+```bash
+npx @cencori/scan
+```
+
+This runs the latest version without installing anything. Perfect for one-time scans or trying out the tool.
+
+## Installation Methods
+
+<CodeGroup>
+
+```bash npm
+# Install globally
+npm install -g @cencori/scan
+
+# Run from anywhere
+cencori-scan
+```
+
+```bash yarn
+# Install globally
+yarn global add @cencori/scan
+
+# Run from anywhere
+cencori-scan
+```
+
+```bash pnpm
+# Install globally
+pnpm add -g @cencori/scan
+
+# Run from anywhere
+cencori-scan
+```
+
+</CodeGroup>
+
+## Add as Project Dependency
+
+For teams that want consistent versions across developers:
+
+<CodeGroup>
+
+```bash npm
+npm install -D @cencori/scan
+```
+
+```bash yarn
+yarn add -D @cencori/scan
+```
+
+```bash pnpm
+pnpm add -D @cencori/scan
+```
+
+</CodeGroup>
+
+Then add to your `package.json` scripts:
+
+```json package.json
+{
+  "scripts": {
+    "scan": "cencori-scan",
+    "scan:ci": "cencori-scan --json --no-prompt"
+  }
+}
+```
+
+Run with:
+
+```bash
+npm run scan
+```
+
+## System Requirements
+
+<ResponseField name="Node.js" type="string" required>
+  Version 18.0 or higher
+</ResponseField>
+
+<ResponseField name="Operating System" type="string">
+  macOS, Linux, or Windows
+</ResponseField>
+
+<ResponseField name="Git" type="string">
+  Required only for changelog generation feature
+</ResponseField>
+
+## Verify Installation
+
+Check that the scanner is installed correctly:
+
+```bash
+npx @cencori/scan --version
+```
+
+You should see:
+
+```
+0.4.8
+```
+
+## Package Information
+
+<ResponseField name="Package Name" type="string">
+  `@cencori/scan`
+</ResponseField>
+
+<ResponseField name="Current Version" type="string">
+  0.4.8
+</ResponseField>
+
+<ResponseField name="Registry" type="string">
+  [npmjs.com/package/@cencori/scan](https://www.npmjs.com/package/@cencori/scan)
+</ResponseField>
+
+<ResponseField name="License" type="string">
+  MIT
+</ResponseField>
+
+## What Gets Installed
+
+The scanner includes:
+
+- **Binary**: `cencori-scan` command-line tool
+- **Patterns**: 50+ detection patterns for secrets, PII, and vulnerabilities
+- **Dependencies**:
+  - `commander` - CLI framework
+  - `chalk` - Terminal colors
+  - `ora` - Elegant spinners
+  - `inquirer` - Interactive prompts
+  - `glob` - File pattern matching
+
+## Uninstall
+
+<CodeGroup>
+
+```bash npm
+# Remove global installation
+npm uninstall -g @cencori/scan
+
+# Remove from project
+npm uninstall @cencori/scan
+```
+
+```bash yarn
+# Remove global installation
+yarn global remove @cencori/scan
+
+# Remove from project
+yarn remove @cencori/scan
+```
+
+```bash pnpm
+# Remove global installation
+pnpm remove -g @cencori/scan
+
+# Remove from project
+pnpm remove @cencori/scan
+```
+
+</CodeGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Command not found after global install">
+    Try running with the full path:
+    
+    ```bash
+    npx cencori-scan
+    ```
+    
+    Or check your PATH includes npm global bin directory:
+    
+    ```bash
+    npm config get prefix
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission denied on macOS/Linux">
+    Run with `sudo` or fix npm permissions:
+    
+    ```bash
+    sudo npm install -g @cencori/scan
+    ```
+    
+    Better: [Configure npm to install globally without sudo](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally)
+  </Accordion>
+  
+  <Accordion title="Old version keeps running">
+    Clear npm cache and reinstall:
+    
+    ```bash
+    npm cache clean --force
+    npm uninstall -g @cencori/scan
+    npm install -g @cencori/scan
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="CLI Usage" icon="terminal" href="/scan/cli-usage">
+  Learn all available commands and options
+</Card>

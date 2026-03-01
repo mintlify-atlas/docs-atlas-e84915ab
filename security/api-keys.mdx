@@ -1,0 +1,259 @@
+---
+title: "API Keys"
+description: "API key types, prefixes, and secure authentication patterns"
+---
+
+## API key formats
+
+Cencori supports multiple API key formats for different use cases. All keys are validated using pattern matching and stored as SHA-256 hashes.
+
+### Key prefixes
+
+Implemented in `lib/api-keys.ts:8-16`:
+
+| Prefix | Type | Environment | Format |
+|--------|------|-------------|--------|
+| `csk_` | Secret Key | Production | `csk_` + 48 hex chars |
+| `cpk_` | Public Key | Production | `cpk_` + 48 hex chars |
+| `csk_test_` | Secret Key | Test | `csk_test_` + 48 hex chars |
+| `cpk_test_` | Public Key | Test | `cpk_test_` + 48 hex chars |
+| `cen_` | Legacy Key | Any | `cen_` + 32 base58 chars |
+| `cake_` | Internal | Any | `cake_` + 48 hex chars |
+| `cencori_` | Service Key | Any | `cencori_` + 16+ chars |
+
+<Warning>
+Always use **secret keys** (`csk_` or `csk_test_`) for server-side applications. Never expose secret keys in client-side code or version control.
+</Warning>
+
+<Note>
+Test keys (`csk_test_`, `cpk_test_`) allow you to develop and test without affecting production data or billing.
+</Note>
+
+## Generating API keys
+
+Generate secure API keys with custom prefixes:
+
+```typescript
+import { generateApiKey } from '@/lib/api-keys';
+
+// Generate with default prefix (cen_)
+const defaultKey = generateApiKey();
+// Example: cen_4A8bK2mP9xQwR5tYuV7zN3jHgF6cEaB
+
+// Generate with custom prefix
+const secretKey = generateApiKey('csk_', 48);
+// Example: csk_a1b2c3d4e5f6789012345678901234567890abcdef123456
+
+// Generate test key
+const testKey = generateApiKey('csk_test_', 48);
+// Example: csk_test_1a2b3c4d5e6f7890abcdef1234567890fedcba098765
+```
+
+Implemented in `lib/api-keys.ts:18-30`
+
+### Key generation details
+
+- Uses Node.js `crypto.randomBytes()` for cryptographic randomness
+- Base58 encoding (excludes similar-looking characters: 0, O, I, l)
+- Configurable body length (default 32 characters)
+
+## Validating API keys
+
+Validate API key format before authentication:
+
+```typescript
+import { validateApiKey } from '@/lib/api-keys';
+
+// Validate key format
+if (!validateApiKey(apiKey)) {
+  return { error: 'Invalid API key format' };
+}
+
+// Valid formats:
+validateApiKey('cen_4A8bK2mP9xQwR5tYuV7zN3jHgF6cEaB'); // true
+validateApiKey('csk_a1b2c3d4e5f6789012345678901234567890abcdef123456'); // true
+validateApiKey('csk_test_1a2b3c4d5e6f7890abcdef1234567890fedcba098765'); // true
+validateApiKey('cake_abc123def456789012345678901234567890abcdef123'); // true
+validateApiKey('cencori_svc_key_12345678'); // true
+
+// Invalid formats:
+validateApiKey('invalid_key'); // false
+validateApiKey(''); // false
+validateApiKey(null); // false
+```
+
+Implemented in `lib/api-keys.ts:56-79`
+
+### Validation patterns
+
+```typescript
+// Legacy base58 format (32 chars)
+/^cen_[1-9A-HJ-NP-Za-km-z]{32}$/
+
+// Current gateway keys (48 hex chars)
+/^(?:csk|cpk)(?:_test)?_[a-f0-9]{48}$/i
+
+// Internal keys
+/^cake_[a-f0-9]{48}$/i
+
+// Service keys (16+ chars)
+/^cencori_[A-Za-z0-9._-]{16,}$/
+```
+
+## Secure storage and verification
+
+<Warning>
+**Never store raw API keys in your database.** Always hash keys before storage using SHA-256.
+</Warning>
+
+### Hash API keys
+
+```typescript
+import { hashApiKey } from '@/lib/api-keys';
+
+const apiKey = 'csk_a1b2c3d4...';
+const hash = hashApiKey(apiKey);
+// Store hash in database
+await db.apiKeys.create({
+  key_hash: hash,
+  user_id: userId,
+  prefix: 'csk_',
+  last_four: apiKey.slice(-4)
+});
+```
+
+Implemented in `lib/api-keys.ts:36-38`
+
+### Verify API keys
+
+Use constant-time comparison to prevent timing attacks:
+
+```typescript
+import { verifyApiKey } from '@/lib/api-keys';
+
+// Lookup stored hash from database
+const storedHash = await db.apiKeys.findOne({ prefix: 'csk_' });
+
+// Verify with constant-time comparison
+if (verifyApiKey(providedApiKey, storedHash.key_hash)) {
+  // Authentication successful
+} else {
+  // Invalid key
+}
+```
+
+Implemented in `lib/api-keys.ts:40-54`
+
+<Note>
+The `verifyApiKey` function uses `crypto.timingSafeEqual()` to prevent timing-based attacks that could reveal information about the stored hash.
+</Note>
+
+## Extracting keys from requests
+
+Extract API keys from HTTP headers with fallback logic:
+
+```typescript
+import { extractCencoriApiKeyFromHeaders } from '@/lib/api-keys';
+
+// Extract from request headers
+const apiKey = extractCencoriApiKeyFromHeaders(request.headers);
+
+if (!apiKey) {
+  return { error: 'Missing API key' };
+}
+
+if (!validateApiKey(apiKey)) {
+  return { error: 'Invalid API key format' };
+}
+
+// Proceed with authentication...
+```
+
+Implemented in `lib/api-keys.ts:113-127`
+
+### Header extraction logic
+
+1. **Check `CENCORI_API_KEY` header first** (highest priority)
+   ```
+   CENCORI_API_KEY: csk_a1b2c3d4...
+   ```
+
+2. **Extract from `Authorization` header** (Bearer token)
+   ```
+   Authorization: Bearer csk_a1b2c3d4...
+   ```
+
+3. **Distinguish JWTs from API keys**
+   - JWT tokens (starting with `eyJ`) are passed through for user auth
+   - Opaque tokens are treated as API keys for backward compatibility
+
+### Check if token is a Cencori API key
+
+```typescript
+import { isCencoriApiKey } from '@/lib/api-keys';
+
+const token = request.headers.get('Authorization')?.split(' ')[1];
+
+if (isCencoriApiKey(token)) {
+  // Handle API key authentication
+} else if (token?.startsWith('eyJ')) {
+  // Handle JWT authentication
+} else {
+  return { error: 'Invalid authentication token' };
+}
+```
+
+Implemented in `lib/api-keys.ts:108-111`
+
+## Masking API keys
+
+Display API keys safely in UI and logs:
+
+```typescript
+import { maskApiKey, extractKeyPrefix, getKeyLastFour } from '@/lib/api-keys';
+
+const apiKey = 'csk_a1b2c3d4e5f6789012345678901234567890abcdef123456';
+
+const prefix = extractKeyPrefix(apiKey);
+// Returns: 'csk_'
+
+const lastFour = getKeyLastFour(apiKey);
+// Returns: '3456'
+
+const masked = maskApiKey(prefix, lastFour);
+// Returns: 'csk_••••••••••••••3456'
+```
+
+Implemented in `lib/api-keys.ts:32-34`, `81-87`
+
+<Tip>
+Always mask API keys in logs, error messages, and user interfaces to prevent accidental exposure.
+</Tip>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use environment variables" icon="lock">
+    Store API keys in `.env` files or secret managers, never in code.
+  </Card>
+  <Card title="Rotate keys regularly" icon="rotate">
+    Generate new keys periodically and revoke old ones.
+  </Card>
+  <Card title="Use test keys in development" icon="flask">
+    Always use `csk_test_` or `cpk_test_` keys for development and testing.
+  </Card>
+  <Card title="Hash before storage" icon="hashtag">
+    Never store raw API keys—always use SHA-256 hashes.
+  </Card>
+</CardGroup>
+
+<Warning>
+**Security checklist before going to production:**
+
+- [ ] All secret keys stored in environment variables
+- [ ] No API keys committed to version control
+- [ ] API keys hashed before database storage
+- [ ] Test keys replaced with production keys
+- [ ] Rate limiting implemented on API endpoints
+- [ ] API key validation on all authenticated routes
+</Warning>

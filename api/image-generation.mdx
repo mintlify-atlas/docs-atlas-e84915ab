@@ -1,0 +1,449 @@
+---
+title: 'Image Generation'
+description: 'POST /api/ai/images/generate - Generate images from text prompts'
+---
+
+## Endpoint
+
+```
+POST https://api.cencori.com/api/ai/images/generate
+```
+
+Generate images from text prompts using DALL-E, GPT Image, Gemini, or Imagen models.
+
+## Authentication
+
+Requires API key in `Authorization` header or `CENCORI_API_KEY` header.
+
+## Request Body
+
+<ParamField body="prompt" type="string" required>
+  Text description of the desired image. Be specific and detailed for best results.
+  
+  Maximum length: 4000 characters
+</ParamField>
+
+<ParamField body="model" type="string">
+  Image generation model to use.
+  
+  Default: `dall-e-3`
+  
+  Available models:
+  - `gpt-image-1.5` - Best text rendering, top ELO rating
+  - `gpt-image-1` - ChatGPT image generation  
+  - `dall-e-3` - High quality, creative
+  - `dall-e-2` - Fast, cost-effective
+  - `gemini-3-pro-image` - High photorealism, fast
+  - `nano-banana-pro` - Alias for Gemini 3 Pro
+  - `gemini-3.1-flash-image` - Reasoning-guided, up to 4K
+  - `nano-banana-2` - Alias for Gemini 3.1 Flash
+  - `imagen-3` - Google Imagen 3
+</ParamField>
+
+<ParamField body="n" type="number">
+  Number of images to generate (1-4).
+  
+  Default: `1`
+  
+  Note: GPT Image models only support n=1
+</ParamField>
+
+<ParamField body="size" type="string">
+  Image dimensions.
+  
+  Available sizes:
+  - `256x256`
+  - `512x512`
+  - `1024x1024` (default)
+  - `1024x1792` (portrait)
+  - `1792x1024` (landscape)
+  - `1536x1024`
+  - `1024x1536`
+</ParamField>
+
+<ParamField body="quality" type="string">
+  Image quality: `standard` or `hd`
+  
+  Default: `standard`
+  
+  Note: Only supported by DALL-E 3
+</ParamField>
+
+<ParamField body="style" type="string">
+  Image style: `vivid` or `natural`
+  
+  Default: `vivid`
+  
+  Note: Only supported by DALL-E 3
+</ParamField>
+
+<ParamField body="responseFormat" type="string">
+  Response format: `url` or `b64_json`
+  
+  Default: `url`
+  
+  Note: GPT Image models always return base64
+</ParamField>
+
+## Response
+
+<ResponseField name="images" type="array">
+  Array of generated images
+  
+  <Expandable title="Image Object">
+    <ResponseField name="url" type="string">
+      Image URL (if responseFormat is 'url')
+    </ResponseField>
+    <ResponseField name="b64_json" type="string">
+      Base64-encoded image data (if responseFormat is 'b64_json')
+    </ResponseField>
+    <ResponseField name="revisedPrompt" type="string">
+      Revised prompt used for generation (DALL-E 3 only)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model used for generation
+</ResponseField>
+
+<ResponseField name="provider" type="string">
+  Provider used: `openai` or `google`
+</ResponseField>
+
+## Examples
+
+### Basic Image Generation
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A futuristic city with flying cars at sunset",
+    "model": "dall-e-3"
+  }'
+```
+
+```json
+{
+  "images": [
+    {
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/...",
+      "revisedPrompt": "A sprawling futuristic metropolis during golden hour..."
+    }
+  ],
+  "model": "dall-e-3",
+  "provider": "openai"
+}
+```
+
+### High Quality Portrait
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Professional portrait of a confident businesswoman",
+    "model": "dall-e-3",
+    "size": "1024x1792",
+    "quality": "hd",
+    "style": "natural"
+  }'
+```
+
+### Using GPT Image
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A sign that says Welcome to Cencori in elegant typography",
+    "model": "gpt-image-1.5"
+  }'
+```
+
+### Using Google Gemini
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Photorealistic image of a mountain lake at dawn",
+    "model": "gemini-3-pro-image"
+  }'
+```
+
+### Multiple Images
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Abstract geometric patterns in vibrant colors",
+    "model": "dall-e-2",
+    "n": 4,
+    "size": "512x512"
+  }'
+```
+
+### Base64 Response
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A cute robot holding a flower",
+    "model": "dall-e-3",
+    "responseFormat": "b64_json"
+  }'
+```
+
+### Using OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+
+const response = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'A white siamese cat',
+  n: 1,
+  size: '1024x1024'
+});
+
+const imageUrl = response.data[0].url;
+console.log(imageUrl);
+```
+
+### Download and Save Image
+
+```typescript
+import fs from 'fs';
+
+const response = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'A serene Japanese garden',
+  response_format: 'b64_json'
+});
+
+const base64Data = response.data[0].b64_json;
+const buffer = Buffer.from(base64Data, 'base64');
+fs.writeFileSync('image.png', buffer);
+```
+
+## Model Comparison
+
+| Model | Provider | Speed | Quality | Text Rendering | Price/Image |
+|-------|----------|-------|---------|----------------|-------------|
+| gpt-image-1.5 | OpenAI | Fast | Excellent | Best | $0.06 |
+| gpt-image-1 | OpenAI | Fast | Excellent | Great | $0.04 |
+| dall-e-3 | OpenAI | Medium | Excellent | Good | $0.04 |
+| dall-e-2 | OpenAI | Fast | Good | Fair | $0.02 |
+| gemini-3-pro-image | Google | Very Fast | Excellent | Good | $0.02 |
+| gemini-3.1-flash-image | Google | Very Fast | Excellent | Excellent | $0.02 |
+| imagen-3 | Google | Medium | Excellent | Good | $0.03 |
+
+## Prompt Engineering Tips
+
+### Be Specific
+
+```
+Bad:  "A dog"
+Good: "A golden retriever puppy playing in a field of flowers at sunset"
+```
+
+### Include Style Details
+
+```
+"Digital art", "oil painting", "photorealistic", "watercolor", 
+"3D render", "minimalist", "vintage poster", "Studio Ghibli style"
+```
+
+### Specify Composition
+
+```
+"close-up portrait", "wide angle shot", "aerial view", 
+"centered composition", "rule of thirds"
+```
+
+### Add Lighting Details
+
+```
+"golden hour lighting", "dramatic shadows", "soft diffused light",
+"neon lights", "volumetric lighting", "cinematic lighting"
+```
+
+### Example Detailed Prompt
+
+```json
+{
+  "prompt": "A photorealistic close-up portrait of a wise old wizard with a long white beard, wearing a dark blue robe with gold embroidery, holding a glowing crystal staff. Cinematic lighting with dramatic shadows. Background shows ancient stone walls with mystical runes. Shot with shallow depth of field, fantasy art style, 8k quality."
+}
+```
+
+## Use Cases
+
+### Product Mockups
+
+```typescript
+const mockup = await client.images.generate({
+  model: 'gpt-image-1.5',
+  prompt: 'Product mockup of a sleek smartphone on a marble desk with coffee cup, professional product photography'
+});
+```
+
+### Marketing Assets
+
+```typescript
+const hero = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'Hero image for SaaS landing page: modern office with diverse team collaborating, bright and professional',
+  size: '1792x1024'
+});
+```
+
+### Social Media Content
+
+```typescript
+const post = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'Instagram post: motivational quote "Believe in yourself" with abstract gradient background, modern typography',
+  size: '1024x1024'
+});
+```
+
+### Concept Art
+
+```typescript
+const concept = await client.images.generate({
+  model: 'gemini-3-pro-image',
+  prompt: 'Concept art for sci-fi video game: alien planet with two moons, purple vegetation, floating islands'
+});
+```
+
+## Best Practices
+
+1. **Choose the right model**
+   - Use `gpt-image-1.5` for text-heavy images
+   - Use `dall-e-3` for creative, artistic images
+   - Use `gemini-3-pro-image` for fast photorealistic results
+   - Use `dall-e-2` for quick iterations and testing
+
+2. **Optimize prompts**
+   - Be specific and descriptive
+   - Include style, lighting, and composition
+   - Iterate and refine based on results
+
+3. **Consider costs**
+   - Test with cheaper models first
+   - Use HD quality only when needed
+   - Generate multiple variations with `n` parameter
+
+4. **Handle responses**
+   - Download and cache generated images
+   - URLs expire after 1 hour
+   - Use `b64_json` for immediate storage
+
+5. **Content policy**
+   - Follow provider content policies
+   - Avoid generating harmful content
+   - Respect copyright and trademarks
+
+## Error Responses
+
+### Missing Prompt
+
+```json
+{
+  "error": "Missing required field: prompt"
+}
+```
+
+HTTP Status: `400`
+
+### Provider Not Configured
+
+```json
+{
+  "error": "No API key configured for openai",
+  "message": "Please add your openai API key in project settings.",
+  "supportedModels": [
+    {"name": "dall-e-3", "description": "High quality, creative"},
+    {"name": "dall-e-2", "description": "Fast, cost-effective"}
+  ]
+}
+```
+
+HTTP Status: `400`
+
+### Content Policy Violation
+
+```json
+{
+  "error": "Image generation failed",
+  "message": "Your request was rejected as a result of our safety system."
+}
+```
+
+HTTP Status: `400`
+
+## Rate Limits
+
+Image generation counts toward monthly request quota:
+
+- Free: 1,000 requests/month
+- Pro: 50,000 requests/month
+- Enterprise: Custom limits
+
+Each request counts as one, regardless of `n` parameter.
+
+## Pricing
+
+Fixed per-image pricing with 20% Cencori markup:
+
+| Model | Provider Cost | Cencori Charge |
+|-------|--------------|----------------|
+| gpt-image-1.5 | $0.06/image | $0.072/image |
+| gpt-image-1 | $0.04/image | $0.048/image |
+| dall-e-3 (standard) | $0.04/image | $0.048/image |
+| dall-e-3 (HD) | $0.08/image | $0.096/image |
+| dall-e-2 | $0.02/image | $0.024/image |
+| gemini models | $0.02/image | $0.024/image |
+| imagen-3 | $0.03/image | $0.036/image |
+
+## List Available Models
+
+```bash
+curl https://api.cencori.com/api/ai/images/generate \
+  -H "Authorization: Bearer $CENCORI_API_KEY"
+```
+
+```json
+{
+  "models": [
+    {
+      "name": "gpt-image-1.5",
+      "provider": "openai",
+      "description": "Best text rendering, top ELO rating"
+    },
+    {
+      "name": "dall-e-3",
+      "provider": "openai",
+      "description": "High quality, creative"
+    }
+    // ...
+  ],
+  "providers": ["openai", "google"],
+  "note": "Midjourney V7 is not supported as it lacks API access."
+}
+```

@@ -1,0 +1,363 @@
+---
+title: 'Error Codes'
+description: 'Understanding Cencori API error responses'
+---
+
+## Error Response Format
+
+All Cencori API errors follow a consistent JSON format:
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable error description",
+  "details": {}
+}
+```
+
+## HTTP Status Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| `200` | Success |
+| `400` | Bad Request - Invalid parameters |
+| `401` | Unauthorized - Invalid or missing API key |
+| `402` | Payment Required - Credit balance exhausted |
+| `403` | Forbidden - Access denied or security violation |
+| `404` | Not Found - Resource doesn't exist |
+| `429` | Too Many Requests - Rate limit exceeded |
+| `500` | Internal Server Error |
+| `502` | Bad Gateway - Provider error |
+| `503` | Service Unavailable |
+
+## Authentication Errors
+
+### Missing API Key
+
+```json
+{
+  "error": "Missing API key. Provide CENCORI_API_KEY or Authorization: Bearer <key>"
+}
+```
+
+HTTP Status: `401`
+
+**Solution:** Include your API key in the request headers.
+
+### Invalid API Key
+
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+HTTP Status: `401`
+
+**Solution:** Verify your API key is correct and hasn't been revoked.
+
+### Domain Not Allowed
+
+```json
+{
+  "error": "Domain not allowed for this API key"
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Add your domain to the allowed domains list for publishable keys.
+
+## Rate Limiting Errors
+
+### Rate Limit Exceeded
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "1000 requests per minute allowed. Try again shortly.",
+  "retry_after_ms": 45000
+}
+```
+
+HTTP Status: `429`
+
+**Solution:** Implement exponential backoff and retry after the specified time.
+
+### Monthly Request Limit Reached
+
+```json
+{
+  "error": "Monthly request limit reached",
+  "message": "You've used 1,000 of 1,000 requests this month.",
+  "current_tier": "free",
+  "usage": {
+    "used": 1000,
+    "limit": 1000,
+    "percentage": 100
+  },
+  "upgrade_message": "Upgrade to Pro for 50,000 requests/month",
+  "upgrade_url": "/billing"
+}
+```
+
+HTTP Status: `429`
+
+**Solution:** Upgrade your plan or wait until the next billing cycle.
+
+## Billing Errors
+
+### Credit Balance Exhausted
+
+```json
+{
+  "error": "Credit balance exhausted",
+  "message": "Your organization has run out of credits. Top up to continue.",
+  "balance": 0,
+  "top_up_url": "/dashboard/organizations"
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Add credits to your account.
+
+### Billing Account Frozen
+
+```json
+{
+  "error": "Billing account frozen",
+  "message": "Billing is currently frozen for this organization. Contact support."
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Contact support to resolve billing issues.
+
+### Spend Cap Reached
+
+```json
+{
+  "error": "Spend cap reached",
+  "message": "Monthly spend cap has been reached.",
+  "spend": {
+    "current": 100.00,
+    "cap": 100.00
+  },
+  "upgrade_url": "/billing"
+}
+```
+
+HTTP Status: `402`
+
+**Solution:** Increase your spend cap or wait until next month.
+
+## Security Errors
+
+### Security Violation Detected
+
+```json
+{
+  "error": "Security violation detected",
+  "message": "I cannot provide that information as it may contain sensitive data or violates our safety policies.",
+  "reasons": ["prompt_injection", "jailbreak"]
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Modify your request to comply with security policies.
+
+### Content Filtered
+
+```json
+{
+  "error": "content_filtered",
+  "message": "Your request was blocked by security policy.",
+  "reasons": ["pii_detected"]
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Remove sensitive information from your request.
+
+### Request Blocked by Data Rule
+
+```json
+{
+  "error": "Request blocked by data rule",
+  "message": "This request contains content that matches a blocked data pattern.",
+  "matched_rules": ["Credit Card Pattern"]
+}
+```
+
+HTTP Status: `403`
+
+**Solution:** Remove or modify content matching your custom data rules.
+
+## Validation Errors
+
+### Invalid Request
+
+```json
+{
+  "error": "Invalid request: messages array is required"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Ensure all required parameters are provided correctly.
+
+### Missing Required Field
+
+```json
+{
+  "error": "bad_request",
+  "message": "Input text is required"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Include all required fields in your request.
+
+### Unsupported Format
+
+```json
+{
+  "error": "bad_request",
+  "message": "Unsupported audio format. Supported: mp3, wav, webm, mp4, m4a, ogg, flac"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Use a supported file format.
+
+## Provider Errors
+
+### Provider Not Configured
+
+```json
+{
+  "error": "Provider 'anthropic' is not configured",
+  "message": "Please add your anthropic API key in project settings to use this model.",
+  "settingsUrl": "/dashboard/projects/abc123/providers"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Add provider API keys in your project settings or use BYOK (Bring Your Own Key).
+
+### Provider Unavailable
+
+```json
+{
+  "error": "All providers failed"
+}
+```
+
+HTTP Status: `500`
+
+**Solution:** Check provider status or try again later. Cencori automatically retries with fallback providers.
+
+## Resource Errors
+
+### Project Not Found
+
+```json
+{
+  "error": "Project not found"
+}
+```
+
+HTTP Status: `404`
+
+**Solution:** Verify the project ID exists and you have access.
+
+### Namespace Not Found
+
+```json
+{
+  "error": "Namespace not found"
+}
+```
+
+HTTP Status: `404`
+
+**Solution:** Create the namespace before using it for memory operations.
+
+## Error Handling Best Practices
+
+### Retry Logic
+
+Implement exponential backoff for retryable errors:
+
+```typescript
+async function makeRequestWithRetry(fn: () => Promise<any>, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.status === 429 || error.status >= 500) {
+        const delay = Math.pow(2, i) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+```
+
+### Error Recovery
+
+```typescript
+try {
+  const response = await client.chat.completions.create({
+    messages: [{role: 'user', content: 'Hello'}]
+  });
+} catch (error) {
+  if (error.status === 401) {
+    // Invalid API key - check configuration
+    console.error('Authentication failed:', error.message);
+  } else if (error.status === 429) {
+    // Rate limited - implement backoff
+    const retryAfter = error.retry_after_ms || 60000;
+    await sleep(retryAfter);
+  } else if (error.status === 403 && error.error === 'content_filtered') {
+    // Security policy violation
+    console.warn('Content filtered:', error.reasons);
+  } else {
+    // Unexpected error
+    throw error;
+  }
+}
+```
+
+### Logging Errors
+
+Log errors with context for debugging:
+
+```typescript
+console.error('API Error', {
+  status: error.status,
+  error: error.error,
+  message: error.message,
+  requestId: response.headers['x-request-id'],
+  timestamp: new Date().toISOString()
+});
+```
+
+## Getting Help
+
+If you encounter persistent errors:
+
+1. Check the [API Status Page](https://status.cencori.com)
+2. Review your [request logs](/dashboard/logs)
+3. Contact support with the `X-Request-ID` header value
+4. Join our [Discord community](https://discord.gg/cencori)

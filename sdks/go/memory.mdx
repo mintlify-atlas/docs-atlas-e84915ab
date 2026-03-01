@@ -1,0 +1,474 @@
+---
+title: 'Memory and RAG'
+description: 'Add context and memory to your AI applications with the Go SDK'
+---
+
+## What is RAG?
+
+Retrieval-Augmented Generation (RAG) enhances AI responses by:
+- **Retrieving** relevant context from your knowledge base
+- **Augmenting** prompts with that context
+- **Generating** accurate, grounded responses
+
+Cencori provides built-in memory storage and semantic search for RAG.
+
+## Store Memories
+
+Store text content with automatic vector embeddings:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    // Store a memory
+    err := client.Memory.Store(ctx, &cencori.MemoryParams{
+        Namespace: "docs",
+        Content:   "Refund policy allows returns within 30 days",
+        Metadata: map[string]interface{}{
+            "category": "policy",
+            "source":   "handbook",
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+## Search Memories
+
+Perform semantic search to find relevant memories:
+
+```go
+func searchMemories() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    results, err := client.Memory.Search(ctx, &cencori.SearchParams{
+        Namespace: "docs",
+        Query:     "what is our refund policy?",
+        Limit:     5,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    for _, result := range results {
+        fmt.Printf("Score: %.2f\n", result.Score)
+        fmt.Printf("Content: %s\n", result.Content)
+        fmt.Printf("Metadata: %v\n\n", result.Metadata)
+    }
+}
+```
+
+## RAG with Chat
+
+Combine memory search with chat for context-aware responses:
+
+```go
+func ragChat() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    userQuery := "What is our refund policy?"
+    
+    // 1. Search for relevant context
+    results, err := client.Memory.Search(ctx, &cencori.SearchParams{
+        Namespace: "docs",
+        Query:     userQuery,
+        Limit:     3,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // 2. Build context from results
+    var contextBuilder strings.Builder
+    contextBuilder.WriteString("Relevant information:\n\n")
+    for _, result := range results {
+        contextBuilder.WriteString(fmt.Sprintf("- %s\n", result.Content))
+    }
+    
+    // 3. Create chat with context
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {
+                Role:    "system",
+                Content: "You are a helpful assistant. Use the provided context to answer questions accurately.",
+            },
+            {
+                Role:    "user",
+                Content: contextBuilder.String() + "\n\nQuestion: " + userQuery,
+            },
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Built-in RAG Method
+
+Cencori provides a simplified RAG API that handles search and chat:
+
+```go
+func simpleRAG() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    // RAG automatically searches and augments the prompt
+    resp, err := client.AI.RAG(ctx, &cencori.RAGParams{
+        Model:     "gpt-4o",
+        Namespace: "docs",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "What is our refund policy?"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Namespaces
+
+Use namespaces to organize memories by domain:
+
+```go
+// Store in different namespaces
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Namespace: "product-docs",
+    Content:   "Installation guide for SDK",
+})
+
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Namespace: "support-tickets",
+    Content:   "Customer reported login issue",
+})
+
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Namespace: "company-policies",
+    Content:   "Remote work policy details",
+})
+
+// Search within specific namespace
+results, _ := client.Memory.Search(ctx, &cencori.SearchParams{
+    Namespace: "product-docs",
+    Query:     "how to install",
+})
+```
+
+## Metadata Filtering
+
+Attach metadata for filtering and organization:
+
+```go
+// Store with rich metadata
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Namespace: "docs",
+    Content:   "API authentication uses Bearer tokens",
+    Metadata: map[string]interface{}{
+        "category":   "security",
+        "version":    "2.0",
+        "last_updated": "2026-03-01",
+        "author":     "security-team",
+        "tags":       []string{"auth", "api", "security"},
+    },
+})
+
+// Search with metadata filter
+results, _ := client.Memory.Search(ctx, &cencori.SearchParams{
+    Namespace: "docs",
+    Query:     "authentication",
+    Filter: map[string]interface{}{
+        "category": "security",
+        "version":  "2.0",
+    },
+    Limit: 5,
+})
+```
+
+## Batch Store
+
+Store multiple memories efficiently:
+
+```go
+func batchStore() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    memories := []cencori.MemoryParams{
+        {
+            Namespace: "docs",
+            Content:   "Free shipping on orders over $50",
+            Metadata:  map[string]interface{}{"category": "shipping"},
+        },
+        {
+            Namespace: "docs",
+            Content:   "30-day return policy with full refund",
+            Metadata:  map[string]interface{}{"category": "returns"},
+        },
+        {
+            Namespace: "docs",
+            Content:   "Customer support available 24/7",
+            Metadata:  map[string]interface{}{"category": "support"},
+        },
+    }
+    
+    err := client.Memory.StoreBatch(ctx, memories)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Stored %d memories\n", len(memories))
+}
+```
+
+## Update Memories
+
+Update existing memories by ID:
+
+```go
+func updateMemory() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    err := client.Memory.Update(ctx, &cencori.UpdateMemoryParams{
+        ID:        "mem_abc123",
+        Namespace: "docs",
+        Content:   "Updated: 60-day return policy with full refund",
+        Metadata: map[string]interface{}{
+            "category":     "returns",
+            "last_updated": "2026-03-01",
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+## Delete Memories
+
+Remove memories by ID or namespace:
+
+```go
+// Delete by ID
+err := client.Memory.Delete(ctx, &cencori.DeleteMemoryParams{
+    ID: "mem_abc123",
+})
+
+// Delete entire namespace
+err = client.Memory.DeleteNamespace(ctx, "old-docs")
+```
+
+## List Memories
+
+Retrieve memories with pagination:
+
+```go
+func listMemories() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    result, err := client.Memory.List(ctx, &cencori.ListMemoryParams{
+        Namespace: "docs",
+        Limit:     50,
+        Offset:    0,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Found %d memories\n", result.Total)
+    for _, memory := range result.Memories {
+        fmt.Printf("ID: %s\n", memory.ID)
+        fmt.Printf("Content: %s\n", memory.Content)
+        fmt.Printf("Created: %s\n\n", memory.CreatedAt)
+    }
+}
+```
+
+## Complete RAG Example
+
+Full example with ingestion and retrieval:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "strings"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    ctx := context.Background()
+    
+    // 1. Ingest knowledge base
+    docs := []string{
+        "Our shipping policy: Free shipping on orders over $50.",
+        "Return policy: Full refund within 30 days of purchase.",
+        "Customer support: Available 24/7 via chat, email, or phone.",
+        "Product warranty: All products come with a 1-year warranty.",
+        "International shipping: We ship to over 100 countries worldwide.",
+    }
+    
+    for i, doc := range docs {
+        err := client.Memory.Store(ctx, &cencori.MemoryParams{
+            Namespace: "customer-service",
+            Content:   doc,
+            Metadata: map[string]interface{}{
+                "doc_id": i + 1,
+                "type":   "policy",
+            },
+        })
+        if err != nil {
+            log.Fatal(err)
+        }
+    }
+    fmt.Println("Knowledge base ingested.\n")
+    
+    // 2. RAG query
+    userQuestion := "Do you offer free shipping?"
+    
+    // Search for context
+    results, err := client.Memory.Search(ctx, &cencori.SearchParams{
+        Namespace: "customer-service",
+        Query:     userQuestion,
+        Limit:     3,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Build context
+    var contextBuilder strings.Builder
+    contextBuilder.WriteString("Context:\n")
+    for _, result := range results {
+        contextBuilder.WriteString(fmt.Sprintf("- %s (score: %.2f)\n", result.Content, result.Score))
+    }
+    
+    // Generate response with context
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {
+                Role:    "system",
+                Content: "You are a customer service assistant. Answer questions based on the provided context.",
+            },
+            {
+                Role:    "user",
+                Content: contextBuilder.String() + "\n\nQuestion: " + userQuestion,
+            },
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("User: %s\n", userQuestion)
+    fmt.Printf("Assistant: %s\n", resp.Choices[0].Message.Content)
+}
+```
+
+## Semantic Search Tips
+
+### 1. Chunk Size
+
+Store content in 200-500 word chunks for best results:
+
+```go
+// Good: Focused chunks
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Content: "Installation: Run 'go get github.com/cencori/cencori-go' to install.",
+})
+
+// Less optimal: Too much content
+client.Memory.Store(ctx, &cencori.MemoryParams{
+    Content: "Entire 5000-word documentation...",
+})
+```
+
+### 2. Use Descriptive Content
+
+```go
+// Good: Clear and descriptive
+Content: "The refund policy allows customers to return products within 30 days for a full refund."
+
+// Less optimal: Vague
+Content: "See section 5.2 for details."
+```
+
+### 3. Include Context in Queries
+
+```go
+// Good: Specific query
+Query: "What is the refund policy for defective products?"
+
+// Less optimal: Too vague
+Query: "refund"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/go/chat">
+    Learn about chat parameters
+  </Card>
+  <Card title="Streaming" icon="stream" href="/sdks/go/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/go/error-handling">
+    Handle errors properly
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/sdks/go/quickstart">
+    Back to quickstart
+  </Card>
+</CardGroup>

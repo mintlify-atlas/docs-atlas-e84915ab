@@ -1,0 +1,263 @@
+---
+title: 'OpenAI Provider Setup'
+description: 'Configure OpenAI models in Cencori'
+---
+
+# OpenAI Provider Setup
+
+Add your OpenAI API key to Cencori to access GPT-4o, GPT-4o Mini, o3, o1, and other OpenAI models through the AI Gateway.
+
+## Adding Your OpenAI API Key
+
+<Steps>
+  <Step title="Get your OpenAI API key">
+    If you don't have an OpenAI API key:
+    
+    1. Go to [platform.openai.com](https://platform.openai.com)
+    2. Sign in or create an account
+    3. Navigate to **API keys**
+    4. Click **Create new secret key**
+    5. Copy the key (it starts with `sk-`)
+  </Step>
+
+  <Step title="Add key to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    1. Go to **Settings** > **Providers**
+    2. Click **Add Provider**
+    3. Select **OpenAI**
+    4. Paste your OpenAI API key
+    5. Click **Save**
+  </Step>
+
+  <Step title="Test the connection">
+    Cencori will automatically test your API key to ensure it's valid.
+  </Step>
+</Steps>
+
+## Available Models
+
+Once configured, you can use any OpenAI model:
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `gpt-4o` | Most capable model | Complex reasoning, coding |
+| `gpt-4o-mini` | Fast and affordable | Simple tasks, high volume |
+| `o3` | Advanced reasoning | Math, science, analysis |
+| `o1` | Reasoning model | Problem solving |
+| `gpt-4-turbo` | Previous generation | Legacy applications |
+| `gpt-3.5-turbo` | Fast and cheap | Simple completions |
+
+## Usage Examples
+
+### Using the SDK
+
+<CodeGroup>
+```typescript TypeScript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+console.log(response.content);
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_your_key")
+
+response = cencori.ai.chat(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.content)
+```
+
+```bash cURL
+curl https://api.cencori.com/v1/chat/completions \
+  -H "Authorization: Bearer csk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+</CodeGroup>
+
+### Streaming Responses
+
+<CodeGroup>
+```typescript TypeScript
+const stream = cencori.ai.chatStream({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Tell me a story' }]
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.delta);
+}
+```
+
+```python Python
+for chunk in cencori.ai.chat_stream(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Tell me a story"}]
+):
+    print(chunk.delta, end="", flush=True)
+```
+</CodeGroup>
+
+### With Vercel AI SDK
+
+```typescript
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: cencori('gpt-4o'),
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+## Model Selection Guide
+
+### When to use GPT-4o
+
+- Complex reasoning tasks
+- Code generation and debugging
+- Long-form content creation
+- Tasks requiring deep understanding
+
+### When to use GPT-4o Mini
+
+- Simple completions
+- High-volume applications
+- Cost-sensitive use cases
+- Real-time interactions
+
+### When to use o3/o1
+
+- Advanced mathematical reasoning
+- Scientific analysis
+- Complex problem-solving
+- Multi-step reasoning tasks
+
+## Pricing
+
+Cencori uses transparent pricing with a small markup on OpenAI's rates:
+
+| Model | Input (per 1K tokens) | Output (per 1K tokens) |
+|-------|----------------------|-----------------------|
+| gpt-4o | $0.0025 | $0.010 |
+| gpt-4o-mini | $0.00015 | $0.0006 |
+| o3 | $0.015 | $0.060 |
+| o1 | $0.015 | $0.060 |
+
+View real-time costs in your [Cencori Dashboard](https://cencori.com/dashboard).
+
+## Features You Get
+
+When using OpenAI through Cencori:
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield">
+    Automatic PII detection and content filtering
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Real-time analytics and performance metrics
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign">
+    Detailed cost breakdown per request
+  </Card>
+  <Card title="Audit Logs" icon="file-lines">
+    Complete history of all requests
+  </Card>
+</CardGroup>
+
+## Advanced Configuration
+
+### Temperature and Parameters
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Write a poem' }],
+  temperature: 0.9,  // More creative
+  maxTokens: 500,
+  topP: 0.95
+});
+```
+
+### Function Calling
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'What\'s the weather in Paris?' }],
+  tools: [{
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Get weather for a location',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' }
+        },
+        required: ['location']
+      }
+    }
+  }]
+});
+```
+
+## Troubleshooting
+
+### Invalid API Key
+
+If you see authentication errors:
+
+1. Check that your OpenAI key starts with `sk-`
+2. Verify the key is active in [OpenAI Dashboard](https://platform.openai.com/api-keys)
+3. Ensure you've added it to Cencori, not using it directly
+
+### Rate Limits
+
+OpenAI rate limits are enforced:
+
+- **Free tier**: 3 requests/minute, 200 requests/day
+- **Paid tier**: Higher limits based on your OpenAI usage tier
+
+View your limits in the [OpenAI Dashboard](https://platform.openai.com/account/rate-limits).
+
+### Model Not Available
+
+Some models require special access:
+
+- **o3**: Requires researcher access from OpenAI
+- **o1**: Available to all paid accounts
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about the AI Gateway
+  </Card>
+  <Card title="Vercel AI SDK" icon="triangle" href="/integrations/vercel-ai-sdk">
+    Use with Vercel AI SDK
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your usage
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full API documentation
+  </Card>
+</CardGroup>

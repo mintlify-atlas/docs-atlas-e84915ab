@@ -1,0 +1,317 @@
+---
+title: AI-Powered Auto-Fix
+description: Automatically fix security issues using Cencori AI with interactive review and approval
+---
+
+# AI-Powered Auto-Fix
+
+Cencori Scan includes AI-powered auto-fix that analyzes security issues and generates secure code fixes automatically.
+
+## How It Works
+
+After scanning, you'll be prompted to auto-fix detected issues:
+
+```
+? Would you like Cencori to auto-fix these issues? (y/n)
+```
+
+The AI will:
+
+1. **Analyze** each issue for false positives
+2. **Generate** secure code fixes
+3. **Present** fixes for your review
+4. **Apply** approved fixes to your codebase
+
+## Getting Started
+
+### 1. Get Your API Key
+
+AI features require a Cencori API key:
+
+<Card title="Get API Key" icon="key" href="https://cencori.com/dashboard">
+  Sign up free at cencori.com/dashboard → API Keys
+</Card>
+
+### 2. Run a Scan
+
+```bash
+npx @cencori/scan
+```
+
+### 3. Enable Auto-Fix
+
+When prompted, enter `y` to enable auto-fix:
+
+```
+? Would you like Cencori to auto-fix these issues? Yes
+```
+
+### 4. Enter API Key
+
+On first use, you'll be prompted for your API key:
+
+```
+? Enter your Cencori API key: ************************
+```
+
+Your API key is saved to `~/.cencorirc` for future scans.
+
+## Interactive Fix Review
+
+The AI presents each fix for your approval:
+
+```
+─── Fix 1/5: app/config.ts:12 ───
+Issue: Hardcoded API Key (high)
+
+- Original:
+    const API_KEY = "sk-abc123...";
+
++ Suggested fix:
+    const API_KEY = process.env.OPENAI_API_KEY;
+
+Explanation: Move secret to environment variable
+
+? Apply this fix?
+❯ Yes - apply this fix
+  No - skip this fix
+  All - apply all remaining fixes
+  Skip rest - save remaining to file
+  Quit - stop reviewing
+```
+
+### Review Options
+
+<ResponseField name="Yes" type="action">
+  Apply this fix and continue to the next one
+</ResponseField>
+
+<ResponseField name="No" type="action">
+  Skip this fix (saved to `.cencori-fixes.json`) and continue
+</ResponseField>
+
+<ResponseField name="All" type="action">
+  Apply this fix and all remaining fixes without review
+</ResponseField>
+
+<ResponseField name="Skip rest" type="action">
+  Skip this and all remaining fixes (saved to file)
+</ResponseField>
+
+<ResponseField name="Quit" type="action">
+  Stop reviewing and save remaining fixes to file
+</ResponseField>
+
+## What Gets Fixed
+
+The AI can automatically fix:
+
+### Hardcoded Secrets
+
+<CodeGroup>
+
+```typescript Before
+const apiKey = "sk-proj-abc123...";
+```
+
+```typescript After
+const apiKey = process.env.OPENAI_API_KEY;
+```
+
+</CodeGroup>
+
+### SQL Injection
+
+<CodeGroup>
+
+```typescript Before
+const query = `SELECT * FROM users WHERE id = ${userId}`;
+```
+
+```typescript After
+const query = 'SELECT * FROM users WHERE id = ?';
+db.query(query, [userId]);
+```
+
+</CodeGroup>
+
+### XSS Vulnerabilities
+
+<CodeGroup>
+
+```tsx Before
+<div dangerouslySetInnerHTML={{ __html: userContent }} />
+```
+
+```tsx After
+import DOMPurify from 'dompurify';
+
+<div dangerouslySetInnerHTML={{ 
+  __html: DOMPurify.sanitize(userContent) 
+}} />
+```
+
+</CodeGroup>
+
+### CORS Issues
+
+<CodeGroup>
+
+```typescript Before
+res.setHeader('Access-Control-Allow-Origin', '*');
+```
+
+```typescript After
+const allowedOrigins = ['https://yourdomain.com'];
+const origin = req.headers.origin;
+if (allowedOrigins.includes(origin)) {
+  res.setHeader('Access-Control-Allow-Origin', origin);
+}
+```
+
+</CodeGroup>
+
+## API Key Management
+
+### Set via Environment Variable
+
+```bash
+export CENCORI_API_KEY=your_api_key_here
+npx @cencori/scan
+```
+
+### Stored Configuration
+
+API keys are stored in `~/.cencorirc`:
+
+```
+api_key=your_cencori_api_key
+```
+
+<Warning>
+  The config file has restricted permissions (600) for security.
+</Warning>
+
+### Remove Saved Key
+
+```bash
+rm ~/.cencorirc
+```
+
+## Skipped Fixes
+
+Fixes you skip or can't be applied are saved to `.cencori-fixes.json`:
+
+```json
+{
+  "generated_at": "2026-01-30T12:00:00.000Z",
+  "total_fixes": 2,
+  "fixes": [
+    {
+      "file": "src/api.ts",
+      "line": 12,
+      "issue_type": "secret",
+      "issue_name": "OpenAI API Key",
+      "severity": "critical",
+      "original_code": "const key = 'sk-...';",
+      "suggested_fix": "const key = process.env.OPENAI_API_KEY;",
+      "explanation": "Move secret to environment variable"
+    }
+  ]
+}
+```
+
+Review this file to manually apply complex fixes.
+
+## False Positive Filtering
+
+Before generating fixes, the AI analyzes each issue:
+
+```
+✔ 3 false positives filtered
+```
+
+False positives (test data, documentation examples) are automatically excluded.
+
+## AI Models Used
+
+<ResponseField name="Analysis" type="model">
+  `meta-llama/llama-4-scout-17b-16e-instruct` - High-accuracy false positive detection
+</ResponseField>
+
+<ResponseField name="Fix Generation" type="model">
+  `llama-3.1-8b-instant` - Fast fix generation with Groq
+</ResponseField>
+
+## Limitations
+
+<Warning>
+  The AI cannot fix all issues automatically. Complex patterns may require manual review.
+</Warning>
+
+**Not auto-fixable:**
+- Architectural security issues
+- Multi-file refactoring
+- Business logic vulnerabilities
+- Infrastructure configurations
+
+**Best for:**
+- Hardcoded secrets
+- Simple injection vulnerabilities
+- XSS in React components
+- Common misconfigurations
+
+## Pro Tips
+
+<Tip>
+  Review all fixes before applying. The AI is smart but not perfect.
+</Tip>
+
+<Tip>
+  Use "All" option for batch fixes of the same type (e.g., multiple hardcoded secrets).
+</Tip>
+
+<Tip>
+  Run the scan again after applying fixes to verify they resolved the issues.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Invalid API key">
+    Check that your API key is correct:
+    
+    1. Visit [cencori.com/dashboard](https://cencori.com/dashboard)
+    2. Go to API Keys section
+    3. Copy the key exactly (including all characters)
+    4. Remove `~/.cencorirc` and try again
+  </Accordion>
+  
+  <Accordion title="No fixes generated">
+    This can happen if:
+    
+    - Issues are too complex for automatic fixing
+    - API rate limit reached
+    - Network connectivity issues
+    
+    Check `.cencori-fixes.json` for manually reviewable suggestions.
+  </Accordion>
+  
+  <Accordion title="Fix not applied">
+    Fixes require exact string matching. If the file changed between scan and fix, the replacement may fail.
+    
+    Solution: Run scan and fix immediately without editing files.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Scoring" icon="shield-check" href="/scan/security-scoring">
+    Understand the A-F tier grading system
+  </Card>
+  
+  <Card title="Detection Patterns" icon="magnifying-glass" href="/scan/secrets-detection">
+    Learn what patterns are detected
+  </Card>
+</CardGroup>

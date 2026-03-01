@@ -1,0 +1,227 @@
+---
+title: 'Authentication'
+description: 'Authenticate your API requests with Cencori'
+---
+
+## API Keys
+
+Cencori uses API keys to authenticate requests. You can create and manage API keys in your project dashboard.
+
+## Key Types
+
+Cencori supports two types of API keys:
+
+### Secret Keys
+
+Secret keys (starting with `csk_`) are used for server-side applications and should be kept confidential.
+
+```bash
+csk_1a2b3c4d5e6f7g8h9i0j
+```
+
+**Use secret keys for:**
+- Backend services
+- Server-side API calls
+- CI/CD pipelines
+
+### Publishable Keys
+
+Publishable keys (starting with `cpk_`) are used for client-side applications and restricted by domain.
+
+```bash
+cpk_1a2b3c4d5e6f7g8h9i0j
+```
+
+**Use publishable keys for:**
+- Web applications
+- Mobile apps
+- Client-side JavaScript
+
+<Note>
+Publishable keys require allowed domains to be configured. Requests from unauthorized domains will be rejected.
+</Note>
+
+## Environments
+
+Each API key belongs to an environment:
+
+- **Production** - Live environment (default)
+- **Test** - Testing environment (key suffix: `_test`)
+
+Test keys are for development and testing. They don't affect production quotas.
+
+## Providing Your API Key
+
+There are three ways to provide your API key:
+
+### 1. Authorization Header (Recommended)
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "Authorization: Bearer csk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### 2. Custom Header
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "CENCORI_API_KEY: csk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### 3. Environment Variable
+
+```bash
+export CENCORI_API_KEY=csk_your_api_key
+```
+
+## Domain Restrictions
+
+For publishable keys, you must configure allowed domains in your project settings:
+
+```json
+{
+  "allowed_domains": [
+    "example.com",
+    "*.example.com",
+    "localhost"
+  ]
+}
+```
+
+Supported patterns:
+- Exact match: `example.com`
+- Wildcard subdomain: `*.example.com`
+- Localhost: `localhost`
+
+## Creating API Keys
+
+### Via Dashboard
+
+1. Go to your project settings
+2. Navigate to "API Keys"
+3. Click "Create API Key"
+4. Choose key type and environment
+5. (For publishable keys) Add allowed domains
+6. Copy your key immediately - it won't be shown again
+
+### Via API
+
+```bash
+POST /api/projects/{projectId}/api-keys
+```
+
+```json
+{
+  "name": "Production Key",
+  "key_type": "secret",
+  "environment": "production"
+}
+```
+
+## Security Best Practices
+
+<Warning>
+Never expose secret keys in client-side code, public repositories, or browser applications.
+</Warning>
+
+### Do:
+- Store keys in environment variables
+- Use secret keys only on the server
+- Rotate keys periodically
+- Use separate keys for different environments
+- Revoke compromised keys immediately
+
+### Don't:
+- Commit keys to version control
+- Share keys via email or chat
+- Use production keys in development
+- Hard-code keys in source code
+
+## Key Rotation
+
+To rotate an API key:
+
+1. Create a new API key
+2. Update your application to use the new key
+3. Verify the new key works
+4. Revoke the old key
+
+## Revoking Keys
+
+Revoke a key immediately if it's compromised:
+
+```bash
+DELETE /api/projects/{projectId}/api-keys/{keyId}
+```
+
+Revoked keys cannot be reactivated. Create a new key instead.
+
+## Error Responses
+
+### Missing API Key
+
+```json
+{
+  "error": "Missing API key. Provide CENCORI_API_KEY or Authorization: Bearer <key>"
+}
+```
+
+HTTP Status: `401 Unauthorized`
+
+### Invalid API Key
+
+```json
+{
+  "error": "Invalid API key"
+}
+```
+
+HTTP Status: `401 Unauthorized`
+
+### Domain Not Allowed
+
+```json
+{
+  "error": "Domain not allowed for this API key"
+}
+```
+
+HTTP Status: `403 Forbidden`
+
+## Using with SDKs
+
+### JavaScript/TypeScript
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+```
+
+### Python
+
+```python
+import openai
+
+openai.api_key = os.getenv("CENCORI_API_KEY")
+openai.api_base = "https://api.cencori.com/v1"
+```
+
+### cURL
+
+```bash
+curl https://api.cencori.com/api/ai/chat \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+```

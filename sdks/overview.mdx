@@ -1,0 +1,160 @@
+---
+title: SDKs Overview
+description: Unified SDKs for AI Gateway, Compute, Workflow, and Storage across all major languages and frameworks
+---
+
+# SDKs Overview
+
+Cencori provides unified infrastructure SDKs that give you one consistent interface for AI Gateway, Compute, Workflow, and Storage. Every operation is secured, logged, and tracked automatically.
+
+## Available SDKs
+
+<CardGroup cols={2}>
+  <Card title="TypeScript/JavaScript" icon="js" href="/sdks/typescript/quickstart">
+    Full-featured SDK with Vercel AI SDK and TanStack AI integrations
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python/quickstart">
+    Native Python SDK with async support and type hints
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/go/quickstart">
+    Idiomatic Go SDK with generics and context support
+  </Card>
+  <Card title="REST API" icon="code" href="/api-reference">
+    Direct HTTP API access for any language
+  </Card>
+</CardGroup>
+
+## Core Features
+
+All Cencori SDKs share these capabilities:
+
+### Unified API Surface
+
+One SDK for all AI infrastructure primitives:
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({ apiKey: 'csk_...' });
+
+// AI Gateway
+await cencori.ai.chat({ model: 'gpt-4o', messages });
+
+// Memory (RAG)
+await cencori.memory.search({ namespace: 'docs', query: '...' });
+
+// Compute (coming soon)
+await cencori.compute.run('function-name', { input });
+
+// Workflow (coming soon)
+await cencori.workflow.trigger('pipeline-id', { data });
+```
+
+### Built-in Security
+
+- **API Key Authentication**: Secure access with `csk_` prefixed keys
+- **Rate Limiting**: Automatic rate limit handling with `RateLimitError`
+- **Content Safety**: Built-in safety checks with detailed violation reasons
+- **Error Handling**: Type-safe error classes for every failure mode
+
+### Automatic Observability
+
+- **Request Logging**: Every API call is logged to your dashboard
+- **Token Tracking**: Automatic usage tracking for cost optimization
+- **Latency Metrics**: Built-in performance monitoring
+- **Error Reporting**: Detailed error traces for debugging
+
+### Production Ready
+
+- **Automatic Retries**: Exponential backoff for transient failures
+- **Streaming Support**: First-class streaming for chat and completions
+- **Type Safety**: Full TypeScript definitions and Python type hints
+- **Framework Integrations**: Native support for Vercel AI SDK, TanStack AI, LangChain
+
+## Quick Comparison
+
+| Feature | TypeScript | Python | Go | REST API |
+|---------|-----------|--------|-----|----------|
+| AI Gateway | ✅ | ✅ | ✅ | ✅ |
+| Streaming | ✅ | ✅ | ✅ | ✅ |
+| Memory/RAG | ✅ | ✅ | ✅ | ✅ |
+| Vercel AI SDK | ✅ | ❌ | ❌ | ❌ |
+| TanStack AI | ✅ | ❌ | ❌ | ❌ |
+| Type Safety | ✅ | ✅ | ✅ | ❌ |
+| Async/Await | ✅ | ✅ | ✅ | N/A |
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install cencori
+```
+
+```bash yarn
+yarn add cencori
+```
+
+```bash pnpm
+pnpm add cencori
+```
+
+```bash python
+pip install cencori
+```
+
+```bash go
+go get github.com/cencori/cencori-go
+```
+</CodeGroup>
+
+## Authentication
+
+All SDKs support multiple authentication methods:
+
+<Tabs>
+  <Tab title="Environment Variable">
+    ```bash
+    export CENCORI_API_KEY=csk_...
+    ```
+    
+    The SDK will automatically read from `CENCORI_API_KEY`.
+  </Tab>
+  
+  <Tab title="Constructor">
+    ```typescript
+    import { Cencori } from 'cencori';
+    
+    const cencori = new Cencori({ 
+      apiKey: 'csk_...' 
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Custom Headers">
+    ```typescript
+    const cencori = new Cencori({ 
+      apiKey: 'csk_...',
+      headers: {
+        'X-Custom-Header': 'value'
+      }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TypeScript Quickstart" icon="bolt" href="/sdks/typescript/quickstart">
+    Get started with the TypeScript SDK in 5 minutes
+  </Card>
+  <Card title="Installation Guide" icon="download" href="/sdks/installation">
+    Detailed installation instructions for all SDKs
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Complete API documentation and examples
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Working code examples for common use cases
+  </Card>
+</CardGroup>

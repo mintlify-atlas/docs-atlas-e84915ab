@@ -1,0 +1,785 @@
+---
+title: Error Handling
+description: Handle errors gracefully with type-safe error classes and retry strategies
+---
+
+# Error Handling
+
+The Cencori SDK provides type-safe error classes and automatic retry mechanisms to help you build robust applications.
+
+## Error Classes
+
+All SDK errors extend from `CencoriError`:
+
+```typescript
+import {
+  CencoriError,
+  AuthenticationError,
+  RateLimitError,
+  SafetyError
+} from 'cencori';
+```
+
+See `packages/sdk/src/errors.ts:7` for error class implementations.
+
+### CencoriError
+
+Base error class for all Cencori errors:
+
+```typescript
+class CencoriError extends Error {
+  constructor(
+    message: string,
+    public statusCode?: number,  // HTTP status code
+    public code?: string         // Error code
+  )
+}
+```
+
+**Example:**
+```typescript
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  if (error instanceof CencoriError) {
+    console.error('API Error:', error.message);
+    console.error('Status:', error.statusCode);
+    console.error('Code:', error.code);
+  }
+}
+```
+
+### AuthenticationError
+
+Thrown when API key is invalid or missing:
+
+```typescript
+class AuthenticationError extends CencoriError {
+  // statusCode: 401
+  // code: 'INVALID_API_KEY'
+}
+```
+
+See `packages/sdk/src/errors.ts:19`
+
+**Example:**
+```typescript
+import { AuthenticationError } from 'cencori';
+
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    console.error('Invalid API key. Please check your CENCORI_API_KEY.');
+    // Redirect to settings page
+    // Or refresh API key from secure storage
+  }
+}
+```
+
+### RateLimitError
+
+Thrown when rate limit is exceeded:
+
+```typescript
+class RateLimitError extends CencoriError {
+  // statusCode: 429
+  // code: 'RATE_LIMIT_EXCEEDED'
+}
+```
+
+See `packages/sdk/src/errors.ts:27`
+
+**Example:**
+```typescript
+import { RateLimitError } from 'cencori';
+
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.error('Rate limit exceeded. Retrying in 60s...');
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    // Retry request
+  }
+}
+```
+
+### SafetyError
+
+Thrown when content violates safety policies:
+
+```typescript
+class SafetyError extends CencoriError {
+  constructor(
+    message: string,
+    public reasons?: string[]  // Violation reasons
+  )
+  // statusCode: 400
+  // code: 'SAFETY_VIOLATION'
+}
+```
+
+See `packages/sdk/src/errors.ts:35`
+
+**Example:**
+```typescript
+import { SafetyError } from 'cencori';
+
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  if (error instanceof SafetyError) {
+    console.error('Content safety violation:', error.message);
+    console.error('Reasons:', error.reasons);
+    // Show user-friendly error
+    // Filter or modify content
+  }
+}
+```
+
+## Comprehensive Error Handling
+
+### Type-Safe Error Handling
+
+```typescript
+import {
+  Cencori,
+  CencoriError,
+  AuthenticationError,
+  RateLimitError,
+  SafetyError
+} from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+try {
+  const response = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hello!' }]
+  });
+  
+  console.log(response.content);
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    // Handle authentication errors
+    console.error('Authentication failed:', error.message);
+    console.error('Please check your API key');
+  } else if (error instanceof RateLimitError) {
+    // Handle rate limiting
+    console.error('Rate limit exceeded:', error.message);
+    console.error('Please wait before retrying');
+  } else if (error instanceof SafetyError) {
+    // Handle content safety violations
+    console.error('Content blocked:', error.message);
+    console.error('Violation reasons:', error.reasons);
+  } else if (error instanceof CencoriError) {
+    // Handle other API errors
+    console.error('API error:', error.message);
+    console.error('Status code:', error.statusCode);
+    console.error('Error code:', error.code);
+  } else {
+    // Handle unexpected errors
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+### Production Error Handler
+
+```typescript
+import { CencoriError, AuthenticationError, RateLimitError, SafetyError } from 'cencori';
+
+interface ErrorResponse {
+  error: string;
+  code?: string;
+  statusCode?: number;
+  retryable: boolean;
+  retryAfter?: number;
+}
+
+function handleCencoriError(error: unknown): ErrorResponse {
+  if (error instanceof AuthenticationError) {
+    return {
+      error: 'Invalid API key. Please check your credentials.',
+      code: error.code,
+      statusCode: error.statusCode,
+      retryable: false
+    };
+  }
+
+  if (error instanceof RateLimitError) {
+    return {
+      error: 'Rate limit exceeded. Please try again later.',
+      code: error.code,
+      statusCode: error.statusCode,
+      retryable: true,
+      retryAfter: 60 // seconds
+    };
+  }
+
+  if (error instanceof SafetyError) {
+    return {
+      error: `Content safety violation: ${error.reasons?.join(', ')}`,
+      code: error.code,
+      statusCode: error.statusCode,
+      retryable: false
+    };
+  }
+
+  if (error instanceof CencoriError) {
+    return {
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      retryable: error.statusCode ? error.statusCode >= 500 : false
+    };
+  }
+
+  return {
+    error: error instanceof Error ? error.message : 'Unknown error occurred',
+    retryable: false
+  };
+}
+
+// Usage
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  const errorResponse = handleCencoriError(error);
+  
+  if (errorResponse.retryable) {
+    console.log(`Retrying in ${errorResponse.retryAfter}s...`);
+  } else {
+    console.error('Non-retryable error:', errorResponse.error);
+  }
+}
+```
+
+## Automatic Retries
+
+The SDK includes automatic retry logic with exponential backoff:
+
+```typescript
+import { fetchWithRetry } from 'cencori';
+
+const response = await fetchWithRetry(
+  'https://api.example.com',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: 'value' })
+  },
+  3 // maxRetries (default: 3)
+);
+```
+
+See `packages/sdk/src/utils.ts:13` for the `fetchWithRetry()` implementation.
+
+### How It Works
+
+- **5xx errors**: Automatically retried with exponential backoff (1s, 2s, 4s)
+- **4xx errors**: Not retried (client errors)
+- **Network errors**: Retried up to max attempts
+- **Successful responses**: Returned immediately
+
+### Custom Retry Logic
+
+Implement your own retry strategy:
+
+```typescript
+async function chatWithRetry(
+  cencori: Cencori,
+  messages: ChatMessage[],
+  maxRetries = 3
+) {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await cencori.ai.chat({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Don't retry on client errors
+      if (error instanceof AuthenticationError || error instanceof SafetyError) {
+        throw error;
+      }
+
+      // Don't retry on last attempt
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+
+      // Calculate backoff with jitter
+      const backoff = Math.pow(2, attempt) * 1000;
+      const jitter = Math.random() * 1000;
+      const delay = backoff + jitter;
+
+      console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError || new Error('Max retries exceeded');
+}
+```
+
+## Streaming Error Handling
+
+### Basic Stream Errors
+
+```typescript
+import { CencoriError } from 'cencori';
+
+try {
+  for await (const chunk of cencori.ai.chatStream({ model: 'gpt-4o', messages })) {
+    // Check for errors in stream
+    if (chunk.error) {
+      console.error('Stream error:', chunk.error);
+      break;
+    }
+    
+    process.stdout.write(chunk.delta);
+  }
+} catch (error) {
+  if (error instanceof CencoriError) {
+    console.error('Stream failed:', error.message, error.statusCode);
+  } else {
+    console.error('Stream error:', error);
+  }
+}
+```
+
+### Graceful Stream Recovery
+
+```typescript
+async function streamWithRecovery(
+  cencori: Cencori,
+  messages: ChatMessage[],
+  onChunk: (text: string) => void
+) {
+  let retries = 0;
+  const maxRetries = 3;
+  let accumulatedContent = '';
+
+  while (retries < maxRetries) {
+    try {
+      for await (const chunk of cencori.ai.chatStream({
+        model: 'gpt-4o',
+        messages
+      })) {
+        if (chunk.error) {
+          throw new Error(chunk.error);
+        }
+
+        accumulatedContent += chunk.delta;
+        onChunk(chunk.delta);
+
+        if (chunk.finish_reason === 'stop') {
+          return accumulatedContent;
+        }
+      }
+
+      return accumulatedContent;
+    } catch (error) {
+      retries++;
+
+      if (error instanceof AuthenticationError || retries >= maxRetries) {
+        throw error;
+      }
+
+      console.log(`Stream error, retrying (${retries}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+    }
+  }
+
+  throw new Error('Stream failed after max retries');
+}
+```
+
+## Framework-Specific Error Handling
+
+### Next.js API Route
+
+```typescript app/api/chat/route.ts
+import { Cencori, CencoriError, AuthenticationError, RateLimitError } from 'cencori';
+import { NextResponse } from 'next/server';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+export async function POST(req: Request) {
+  try {
+    const { messages } = await req.json();
+
+    const response = await cencori.ai.chat({
+      model: 'gpt-4o',
+      messages
+    });
+
+    return NextResponse.json(response);
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      return NextResponse.json(
+        { error: 'Invalid API key' },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      );
+    }
+
+    if (error instanceof CencoriError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode || 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Express.js Middleware
+
+```typescript
+import express from 'express';
+import { CencoriError, AuthenticationError, RateLimitError, SafetyError } from 'cencori';
+
+const app = express();
+
+// Error handling middleware
+app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (error instanceof AuthenticationError) {
+    res.status(401).json({
+      error: 'Authentication failed',
+      message: error.message
+    });
+  } else if (error instanceof RateLimitError) {
+    res.status(429)
+      .header('Retry-After', '60')
+      .json({
+        error: 'Rate limit exceeded',
+        message: error.message,
+        retryAfter: 60
+      });
+  } else if (error instanceof SafetyError) {
+    res.status(400).json({
+      error: 'Content safety violation',
+      message: error.message,
+      reasons: error.reasons
+    });
+  } else if (error instanceof CencoriError) {
+    res.status(error.statusCode || 500).json({
+      error: 'API error',
+      message: error.message,
+      code: error.code
+    });
+  } else {
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Route
+app.post('/api/chat', async (req, res, next) => {
+  try {
+    const response = await cencori.ai.chat({
+      model: 'gpt-4o',
+      messages: req.body.messages
+    });
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+```
+
+## Monitoring & Logging
+
+### Structured Logging
+
+```typescript
+import { CencoriError } from 'cencori';
+
+function logError(error: unknown, context: Record<string, unknown> = {}) {
+  const timestamp = new Date().toISOString();
+  
+  if (error instanceof CencoriError) {
+    console.error(JSON.stringify({
+      timestamp,
+      type: 'CencoriError',
+      name: error.name,
+      message: error.message,
+      statusCode: error.statusCode,
+      code: error.code,
+      ...context
+    }));
+  } else {
+    console.error(JSON.stringify({
+      timestamp,
+      type: 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+      ...context
+    }));
+  }
+}
+
+// Usage
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  logError(error, {
+    userId: 'user_123',
+    model: 'gpt-4o',
+    messageCount: messages.length
+  });
+}
+```
+
+### Error Tracking Integration
+
+```typescript
+import * as Sentry from '@sentry/node';
+import { CencoriError, AuthenticationError } from 'cencori';
+
+try {
+  await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  // Don't track authentication errors (likely config issues)
+  if (error instanceof AuthenticationError) {
+    console.error('Invalid API key');
+    return;
+  }
+
+  // Track other errors
+  if (error instanceof CencoriError) {
+    Sentry.captureException(error, {
+      tags: {
+        errorType: 'cencori_api',
+        statusCode: error.statusCode,
+        errorCode: error.code
+      },
+      extra: {
+        model: 'gpt-4o',
+        messageCount: messages.length
+      }
+    });
+  } else {
+    Sentry.captureException(error);
+  }
+
+  throw error;
+}
+```
+
+## Best Practices
+
+### 1. Always Handle Errors
+
+```typescript
+// ❌ Bad: Unhandled errors
+const response = await cencori.ai.chat({ model: 'gpt-4o', messages });
+
+// ✅ Good: Proper error handling
+try {
+  const response = await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  // Handle error appropriately
+}
+```
+
+### 2. Use Type Guards
+
+```typescript
+// ✅ Good: Type-safe error handling
+if (error instanceof AuthenticationError) {
+  // TypeScript knows this is AuthenticationError
+  console.error(error.statusCode); // Type-safe
+}
+```
+
+### 3. Don't Retry Client Errors
+
+```typescript
+// ✅ Good: Only retry server errors
+if (error instanceof CencoriError) {
+  const shouldRetry = error.statusCode ? error.statusCode >= 500 : false;
+  if (shouldRetry) {
+    // Retry logic
+  }
+}
+```
+
+### 4. Provide User-Friendly Messages
+
+```typescript
+function getUserFriendlyMessage(error: unknown): string {
+  if (error instanceof AuthenticationError) {
+    return 'Unable to authenticate. Please contact support.';
+  }
+  if (error instanceof RateLimitError) {
+    return 'Too many requests. Please try again in a moment.';
+  }
+  if (error instanceof SafetyError) {
+    return 'Your message was blocked by our safety filters. Please rephrase.';
+  }
+  if (error instanceof CencoriError) {
+    return 'An error occurred. Please try again.';
+  }
+  return 'An unexpected error occurred.';
+}
+```
+
+### 5. Log for Debugging
+
+```typescript
+try {
+  const response = await cencori.ai.chat({ model: 'gpt-4o', messages });
+} catch (error) {
+  // Log detailed error for debugging
+  console.error('Chat request failed:', {
+    error,
+    model: 'gpt-4o',
+    messageCount: messages.length,
+    timestamp: new Date().toISOString()
+  });
+  
+  // Show user-friendly message
+  throw new Error(getUserFriendlyMessage(error));
+}
+```
+
+## Complete Example
+
+Production-ready error handling:
+
+```typescript
+import {
+  Cencori,
+  CencoriError,
+  AuthenticationError,
+  RateLimitError,
+  SafetyError,
+  ChatMessage
+} from 'cencori';
+
+class ChatService {
+  private cencori: Cencori;
+  private maxRetries = 3;
+
+  constructor() {
+    this.cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+  }
+
+  async chat(messages: ChatMessage[], retries = 0): Promise<string> {
+    try {
+      const response = await this.cencori.ai.chat({
+        model: 'gpt-4o',
+        messages
+      });
+
+      return response.content;
+    } catch (error) {
+      // Handle authentication errors (don't retry)
+      if (error instanceof AuthenticationError) {
+        this.logError('Authentication failed', error);
+        throw new Error('API key is invalid. Please check your configuration.');
+      }
+
+      // Handle rate limits (retry with delay)
+      if (error instanceof RateLimitError) {
+        if (retries < this.maxRetries) {
+          this.logError(`Rate limited, retrying in 60s (${retries + 1}/${this.maxRetries})`, error);
+          await this.sleep(60000);
+          return this.chat(messages, retries + 1);
+        }
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+
+      // Handle safety violations (don't retry)
+      if (error instanceof SafetyError) {
+        this.logError('Content safety violation', error, { reasons: error.reasons });
+        throw new Error('Your message was blocked by safety filters.');
+      }
+
+      // Handle server errors (retry)
+      if (error instanceof CencoriError && error.statusCode && error.statusCode >= 500) {
+        if (retries < this.maxRetries) {
+          const delay = Math.pow(2, retries) * 1000;
+          this.logError(`Server error, retrying in ${delay}ms (${retries + 1}/${this.maxRetries})`, error);
+          await this.sleep(delay);
+          return this.chat(messages, retries + 1);
+        }
+        throw new Error('Service temporarily unavailable. Please try again.');
+      }
+
+      // Handle other errors
+      this.logError('Unexpected error', error);
+      throw new Error('An unexpected error occurred. Please try again.');
+    }
+  }
+
+  private logError(message: string, error: unknown, extra: Record<string, unknown> = {}) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      message,
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        ...(error instanceof CencoriError ? {
+          statusCode: error.statusCode,
+          code: error.code
+        } : {})
+      } : String(error),
+      ...extra
+    }));
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Usage
+const chatService = new ChatService();
+
+try {
+  const response = await chatService.chat([
+    { role: 'user', content: 'Hello!' }
+  ]);
+  console.log(response);
+} catch (error) {
+  console.error('Chat failed:', error.message);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/typescript/chat">
+    Learn about chat completions
+  </Card>
+  <Card title="Streaming" icon="water" href="/sdks/typescript/streaming">
+    Handle streaming errors
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all error codes
+  </Card>
+  <Card title="Best Practices" icon="star" href="/best-practices">
+    Production deployment tips
+  </Card>
+</CardGroup>

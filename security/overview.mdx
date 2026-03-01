@@ -1,0 +1,161 @@
+---
+title: "Security Overview"
+description: "Multi-layer security architecture protecting your AI applications from jailbreaks, PII leakage, and content injection"
+---
+
+## Security architecture
+
+Cencori implements a comprehensive multi-layer security system that protects your AI applications at every stage of the request lifecycle. The security layer operates in two phases:
+
+<Steps>
+  <Step title="Input Security (Phase 1)">
+    Analyzes user input before sending to AI models, detecting jailbreak attempts, prompt injections, and PII in requests.
+  </Step>
+  <Step title="Output Security (Phase 2)">
+    Scans AI model responses before returning to users, blocking PII leakage and harmful content generation.
+  </Step>
+</Steps>
+
+## Security layers
+
+Cencori's security system consists of multiple specialized detection layers:
+
+### Content filtering
+
+Detects and blocks sensitive information patterns in both input and output:
+
+- **PII detection**: Email addresses, phone numbers, SSNs, credit cards
+- **Obfuscated PII**: Detects "john dot smith at company dot org" patterns
+- **Intent analysis**: Identifies indirect requests for PII sharing techniques
+
+Implemented in `lib/safety/content-filter.ts:86-150`
+
+### Jailbreak detection
+
+Identifies sophisticated prompt injection and jailbreak attempts:
+
+- **Social engineering**: Story-based malicious requests
+- **System extraction**: Attempts to reveal system prompts or architecture
+- **Behavioral probing**: Testing AI boundaries and safety guardrails
+- **Multi-vector attacks**: Complex multi-step jailbreak techniques
+
+Implemented in `lib/safety/jailbreak-detector.ts:148-284`
+
+<Warning>
+The jailbreak detector successfully blocks the **Wisc attack** and similar sophisticated prompt injection techniques that combine social engineering with PII exfiltration.
+</Warning>
+
+### Output scanning
+
+Prevents harmful content generation and data leakage:
+
+- **PII leakage prevention**: Blocks responses containing real or example PII
+- **Instruction leakage detection**: Prevents AI from teaching PII sharing techniques
+- **Context-aware analysis**: Uses input context to determine output safety
+
+Implemented in `lib/safety/output-scanner.ts:68-221`
+
+### Custom data rules
+
+Flexible rule engine for project-specific sensitive data:
+
+- **Keywords matching**: Simple keyword-based detection
+- **Regex patterns**: Complex pattern matching for custom formats
+- **JSON path filtering**: Extract and redact specific JSON fields
+- **AI detection**: Use Gemini 2.5 Flash for semantic classification
+
+Implemented in `lib/safety/custom-data-rules.ts:297-374`
+
+## Security configuration
+
+Configure security thresholds and behaviors per project:
+
+```typescript
+export interface ProjectSecurityConfig {
+  inputThreshold?: number;        // Default 0.5
+  outputThreshold?: number;       // Default 0.6 (stricter)
+  jailbreakThreshold?: number;    // Default 0.7
+  enableOutputScanning?: boolean; // Default true
+  enableJailbreakDetection?: boolean; // Default true
+  enableObfuscatedPII?: boolean;  // Default true
+  enableIntentAnalysis?: boolean; // Default true
+}
+```
+
+<Note>
+Lower threshold values mean stricter security. A threshold of 0.5 means content with a safety score below 0.5 will be blocked.
+</Note>
+
+## Performance characteristics
+
+Based on benchmark tests in `lib/safety/verify-security.ts:119-134`:
+
+- **Input security**: ~2-5ms average per check
+- **Output security**: ~3-7ms average per check
+- **AI detection**: ~500-2000ms (5s timeout, runs async)
+
+<Tip>
+All security checks run synchronously except AI detection, which has a 5-second timeout and can run in the background.
+</Tip>
+
+## Implementation example
+
+```typescript
+import { checkInputSecurity, checkOutputSecurity } from '@/lib/safety/multi-layer-check';
+
+// Phase 1: Check user input
+const inputResult = checkInputSecurity(
+  userMessage,
+  conversationHistory,
+  {
+    inputThreshold: 0.5,
+    jailbreakThreshold: 0.7,
+    enableObfuscatedPII: true
+  }
+);
+
+if (!inputResult.safe) {
+  return {
+    error: 'Input blocked by security layer',
+    reasons: inputResult.reasons,
+    riskScore: inputResult.riskScore
+  };
+}
+
+// Send to AI model...
+const aiResponse = await callAIModel(userMessage);
+
+// Phase 2: Check AI output
+const outputResult = checkOutputSecurity(
+  aiResponse,
+  {
+    inputText: userMessage,
+    inputSecurityResult: inputResult,
+    conversationHistory
+  }
+);
+
+if (!outputResult.safe) {
+  return {
+    error: 'Output blocked by security layer',
+    reasons: outputResult.reasons,
+    blockedContent: outputResult.blockedContent
+  };
+}
+
+return { content: aiResponse };
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="API Keys" icon="key" href="/security/api-keys">
+    Learn about API key types and secure authentication
+  </Card>
+  <Card title="PII Detection" icon="shield-check" href="/security/pii-detection">
+    Understand PII detection patterns and obfuscation handling
+  </Card>
+  <Card title="Content Filtering" icon="filter" href="/security/content-filtering">
+    Configure content filtering rules and custom data protection
+  </Card>
+</CardGroup>

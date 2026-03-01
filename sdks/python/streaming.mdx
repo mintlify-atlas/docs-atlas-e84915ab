@@ -1,0 +1,333 @@
+---
+title: "Streaming Responses"
+description: "Stream AI responses in real-time with the Python SDK for better user experience and lower perceived latency."
+---
+
+## Overview
+
+Streaming allows you to display AI responses as they're generated, rather than waiting for the complete response. This provides a better user experience, especially for longer responses.
+
+## Basic Streaming
+
+Use `chat_stream()` instead of `chat()` to enable streaming:
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_...")
+
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Tell me a story about a robot"}],
+    model="gpt-4o"
+):
+    print(chunk.delta, end="", flush=True)
+
+print()  # New line at the end
+```
+
+## Stream Chunks
+
+Each chunk is a `StreamChunk` object with the following fields:
+
+```python
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Count to 10"}]
+):
+    print(f"Delta: {chunk.delta!r}")
+    print(f"Finish reason: {chunk.finish_reason}")
+    print(f"Error: {chunk.error}")
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `delta` | `str` | Text fragment for this chunk |
+| `finish_reason` | `str \| None` | Why generation stopped (only in last chunk) |
+| `error` | `str \| None` | Error message if the stream failed |
+
+## Collecting the Full Response
+
+Build the complete response by concatenating chunks:
+
+```python
+full_response = ""
+
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Explain photosynthesis"}]
+):
+    full_response += chunk.delta
+    print(chunk.delta, end="", flush=True)
+
+print(f"\n\nComplete response: {full_response}")
+```
+
+## Streaming Parameters
+
+All chat parameters work with streaming:
+
+```python
+for chunk in cencori.ai.chat_stream(
+    messages=[
+        {"role": "system", "content": "You are a creative writer."},
+        {"role": "user", "content": "Write a short poem"}
+    ],
+    model="claude-3-haiku",
+    temperature=0.9,
+    max_tokens=200,
+    user_id="user_789"
+):
+    print(chunk.delta, end="", flush=True)
+```
+
+## Error Handling
+
+Handle errors during streaming:
+
+```python
+from cencori import Cencori, AuthenticationError, RateLimitError
+
+cencori = Cencori(api_key="csk_...")
+
+try:
+    for chunk in cencori.ai.chat_stream(
+        messages=[{"role": "user", "content": "Hello"}]
+    ):
+        # Check for error in chunk
+        if chunk.error:
+            print(f"Stream error: {chunk.error}")
+            break
+        
+        print(chunk.delta, end="", flush=True)
+except AuthenticationError:
+    print("Invalid API key")
+except RateLimitError:
+    print("Rate limit exceeded")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+## Finish Reasons
+
+The last chunk contains a `finish_reason`:
+
+```python
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Hello"}]
+):
+    if chunk.finish_reason:
+        print(f"\nStream ended: {chunk.finish_reason}")
+    else:
+        print(chunk.delta, end="", flush=True)
+```
+
+Possible finish reasons:
+
+- `stop`: Natural completion
+- `length`: Hit max_tokens limit
+- `content_filter`: Blocked by safety filters
+- `error`: Stream failed
+
+## Real-time Display
+
+Create a typing effect in CLI applications:
+
+```python
+import time
+
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Write a haiku"}]
+):
+    print(chunk.delta, end="", flush=True)
+    time.sleep(0.02)  # Slight delay for visual effect
+```
+
+## Web Framework Integration
+
+### Flask Example
+
+```python
+from flask import Flask, Response, stream_with_context
+from cencori import Cencori
+
+app = Flask(__name__)
+cencori = Cencori(api_key="csk_...")
+
+@app.route('/stream')
+def stream():
+    def generate():
+        for chunk in cencori.ai.chat_stream(
+            messages=[{"role": "user", "content": "Tell me a story"}]
+        ):
+            yield f"data: {chunk.delta}\n\n"
+    
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream'
+    )
+```
+
+### FastAPI Example
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from cencori import Cencori
+
+app = FastAPI()
+cencori = Cencori(api_key="csk_...")
+
+@app.get("/stream")
+async def stream():
+    def generate():
+        for chunk in cencori.ai.chat_stream(
+            messages=[{"role": "user", "content": "Hello"}]
+        ):
+            yield f"data: {chunk.delta}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream"
+    )
+```
+
+## Advanced: Custom Stream Handler
+
+Create a reusable stream handler:
+
+```python
+class StreamHandler:
+    def __init__(self):
+        self.text = ""
+        self.tokens = 0
+    
+    def handle_chunk(self, chunk):
+        if chunk.error:
+            raise Exception(f"Stream error: {chunk.error}")
+        
+        self.text += chunk.delta
+        self.tokens += 1
+        
+        # Custom processing
+        if chunk.finish_reason:
+            print(f"\n\nStream complete: {self.tokens} chunks")
+        else:
+            print(chunk.delta, end="", flush=True)
+    
+    def get_full_text(self):
+        return self.text
+
+# Usage
+handler = StreamHandler()
+
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Explain quantum computing"}]
+):
+    handler.handle_chunk(chunk)
+
+print(f"Full response: {handler.get_full_text()}")
+```
+
+## Streaming with Context
+
+Maintain conversation context while streaming:
+
+```python
+class StreamingChatSession:
+    def __init__(self, cencori, system_prompt=None):
+        self.cencori = cencori
+        self.messages = []
+        if system_prompt:
+            self.messages.append({"role": "system", "content": system_prompt})
+    
+    def stream_message(self, user_message, **kwargs):
+        self.messages.append({"role": "user", "content": user_message})
+        full_response = ""
+        
+        for chunk in self.cencori.ai.chat_stream(
+            messages=self.messages,
+            **kwargs
+        ):
+            full_response += chunk.delta
+            yield chunk
+        
+        # Save assistant response
+        self.messages.append({"role": "assistant", "content": full_response})
+
+# Usage
+session = StreamingChatSession(cencori, system_prompt="You are helpful.")
+
+for chunk in session.stream_message("What is Python?"):
+    print(chunk.delta, end="", flush=True)
+
+print("\n---")
+
+for chunk in session.stream_message("Tell me more"):  # Remembers context
+    print(chunk.delta, end="", flush=True)
+```
+
+## Performance Tips
+
+### Buffering
+
+Buffer chunks to reduce I/O overhead:
+
+```python
+buffer = []
+buffer_size = 5
+
+for chunk in cencori.ai.chat_stream(
+    messages=[{"role": "user", "content": "Write a long essay"}]
+):
+    buffer.append(chunk.delta)
+    
+    if len(buffer) >= buffer_size:
+        print("".join(buffer), end="", flush=True)
+        buffer.clear()
+
+# Flush remaining
+if buffer:
+    print("".join(buffer), end="", flush=True)
+```
+
+### Timeout
+
+Streaming uses a 60-second timeout by default (longer than regular requests):
+
+```python
+# This is handled automatically by the SDK
+# The streaming timeout is 60 seconds vs 30 seconds for regular requests
+```
+
+## Comparison: Streaming vs Non-Streaming
+
+| Feature | Non-Streaming | Streaming |
+|---------|--------------|----------|
+| **Response time** | Wait for full response | Immediate feedback |
+| **User experience** | Loading state | Progressive display |
+| **Memory usage** | Complete response in memory | Chunks processed incrementally |
+| **Error handling** | Single try/catch | Per-chunk error checking |
+| **Use case** | Batch processing, APIs | User-facing chat, CLI tools |
+
+## When to Use Streaming
+
+**Use streaming when:**
+- Building chat interfaces
+- Responses are long (>100 tokens)
+- User experience is priority
+- Real-time feedback is needed
+
+**Use non-streaming when:**
+- Processing responses programmatically
+- Need complete response for validation
+- Building APIs or background jobs
+- Response metadata is critical
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/python/chat">
+    Learn about non-streaming chat requests
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/python/error-handling">
+    Handle streaming errors gracefully
+  </Card>
+</CardGroup>

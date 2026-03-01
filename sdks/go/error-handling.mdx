@@ -1,0 +1,563 @@
+---
+title: 'Error Handling'
+description: 'Handle errors gracefully in the Cencori Go SDK'
+---
+
+## Error Types
+
+The Go SDK uses idiomatic error handling with typed errors:
+
+```go
+import (
+    "errors"
+    "github.com/cencori/cencori-go"
+)
+
+var (
+    ErrInvalidAPIKey     = errors.New("invalid API key")
+    ErrRateLimited       = errors.New("rate limit exceeded")
+    ErrContentFiltered   = errors.New("content blocked by safety filter")
+    ErrInsufficientFunds = errors.New("insufficient credits")
+    ErrInvalidModel      = errors.New("invalid model specified")
+    ErrTimeout           = errors.New("request timeout")
+    ErrNetworkError      = errors.New("network error")
+)
+```
+
+## Basic Error Handling
+
+Always check for errors:
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    resp, err := client.Chat.Create(context.Background(), &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    })
+    
+    if err != nil {
+        log.Fatalf("Chat request failed: %v", err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Typed Error Handling
+
+Check for specific error types:
+
+```go
+import "errors"
+
+func handleRequest() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    })
+    
+    if err != nil {
+        if errors.Is(err, cencori.ErrInvalidAPIKey) {
+            log.Fatal("Invalid API key. Check your CENCORI_API_KEY environment variable.")
+        } else if errors.Is(err, cencori.ErrRateLimited) {
+            log.Println("Rate limited. Retrying after delay...")
+            time.Sleep(5 * time.Second)
+            // Retry logic here
+        } else if errors.Is(err, cencori.ErrContentFiltered) {
+            log.Println("Content was blocked by safety filter")
+            // Handle blocked content
+        } else if errors.Is(err, cencori.ErrInsufficientFunds) {
+            log.Fatal("Insufficient credits. Please add credits at cencori.com")
+        } else {
+            log.Fatalf("Unexpected error: %v", err)
+        }
+        return
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Complete Error Handling Example
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log"
+    "os"
+    "time"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
+    
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Tell me about AI"},
+        },
+    })
+    
+    if err != nil {
+        handleError(err)
+        return
+    }
+    
+    fmt.Printf("Response: %s\n", resp.Choices[0].Message.Content)
+    fmt.Printf("Tokens: %d\n", resp.Usage.TotalTokens)
+    fmt.Printf("Cost: $%.6f\n", resp.CostUSD)
+}
+
+func handleError(err error) {
+    switch {
+    case errors.Is(err, cencori.ErrInvalidAPIKey):
+        log.Fatal("❌ Invalid API key. Get your key at cencori.com/dashboard")
+        
+    case errors.Is(err, cencori.ErrRateLimited):
+        log.Println("⏱️  Rate limited. Please wait and retry.")
+        
+    case errors.Is(err, cencori.ErrContentFiltered):
+        log.Println("🛡️  Content blocked by safety filter")
+        
+    case errors.Is(err, cencori.ErrInsufficientFunds):
+        log.Fatal("💰 Insufficient credits. Add credits at cencori.com/billing")
+        
+    case errors.Is(err, cencori.ErrInvalidModel):
+        log.Fatal("❌ Invalid model. Check supported models at cencori.com/docs")
+        
+    case errors.Is(err, context.DeadlineExceeded):
+        log.Fatal("⏱️  Request timeout. Try increasing timeout or using a faster model.")
+        
+    case errors.Is(err, context.Canceled):
+        log.Println("❌ Request cancelled")
+        
+    default:
+        log.Fatalf("❌ Unexpected error: %v", err)
+    }
+}
+```
+
+## Retry Logic
+
+Implement exponential backoff for transient errors:
+
+```go
+import (
+    "context"
+    "errors"
+    "math"
+    "time"
+    "github.com/cencori/cencori-go"
+)
+
+func chatWithRetry(client *cencori.Client, params *cencori.ChatParams, maxRetries int) (*cencori.ChatResponse, error) {
+    var resp *cencori.ChatResponse
+    var err error
+    
+    for attempt := 0; attempt <= maxRetries; attempt++ {
+        resp, err = client.Chat.Create(context.Background(), params)
+        
+        if err == nil {
+            return resp, nil
+        }
+        
+        // Don't retry on authentication errors
+        if errors.Is(err, cencori.ErrInvalidAPIKey) {
+            return nil, err
+        }
+        
+        // Don't retry on content filter errors
+        if errors.Is(err, cencori.ErrContentFiltered) {
+            return nil, err
+        }
+        
+        // Retry on rate limit or network errors
+        if errors.Is(err, cencori.ErrRateLimited) || errors.Is(err, cencori.ErrNetworkError) {
+            if attempt < maxRetries {
+                // Exponential backoff: 1s, 2s, 4s, 8s...
+                backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+                log.Printf("Attempt %d failed. Retrying in %v...\n", attempt+1, backoff)
+                time.Sleep(backoff)
+                continue
+            }
+        }
+        
+        return nil, err
+    }
+    
+    return nil, fmt.Errorf("max retries exceeded: %w", err)
+}
+
+// Usage
+func main() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    resp, err := chatWithRetry(client, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    }, 3) // Max 3 retries
+    
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Context Timeout Handling
+
+Handle timeout errors gracefully:
+
+```go
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func chatWithTimeout() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    // 10 second timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Write a long essay"},
+        },
+    })
+    
+    if err != nil {
+        if errors.Is(err, context.DeadlineExceeded) {
+            fmt.Println("Request timed out. Consider:")
+            fmt.Println("- Increasing timeout duration")
+            fmt.Println("- Using a faster model (e.g., gpt-4o-mini)")
+            fmt.Println("- Shortening your prompt")
+            fmt.Println("- Using streaming for long responses")
+            return
+        }
+        log.Fatal(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Streaming Error Handling
+
+Handle errors in streams:
+
+```go
+func streamWithErrors() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Tell me a story"},
+        },
+    })
+    
+    // Handle initialization errors
+    if err != nil {
+        if errors.Is(err, cencori.ErrInvalidAPIKey) {
+            log.Fatal("Invalid API key")
+        } else if errors.Is(err, cencori.ErrRateLimited) {
+            log.Fatal("Rate limited")
+        } else {
+            log.Fatalf("Stream initialization failed: %v", err)
+        }
+    }
+    
+    // Handle streaming errors
+    for chunk := range stream {
+        // Check for errors in chunk
+        if chunk.Error != nil {
+            log.Printf("Stream error: %v\n", chunk.Error)
+            
+            if errors.Is(chunk.Error, cencori.ErrContentFiltered) {
+                fmt.Println("Content was filtered mid-stream")
+            }
+            
+            break
+        }
+        
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+}
+```
+
+## Validation Errors
+
+Validate parameters before making requests:
+
+```go
+func validateAndChat(model string, messages []cencori.Message) error {
+    // Validate model
+    validModels := []string{"gpt-4o", "gpt-4o-mini", "claude-3-opus", "gemini-2.5-flash"}
+    isValid := false
+    for _, m := range validModels {
+        if model == m {
+            isValid = true
+            break
+        }
+    }
+    if !isValid {
+        return fmt.Errorf("invalid model: %s", model)
+    }
+    
+    // Validate messages
+    if len(messages) == 0 {
+        return errors.New("messages cannot be empty")
+    }
+    
+    for i, msg := range messages {
+        if msg.Role == "" {
+            return fmt.Errorf("message %d: role is required", i)
+        }
+        if msg.Content == "" {
+            return fmt.Errorf("message %d: content is required", i)
+        }
+    }
+    
+    // Make request
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    resp, err := client.Chat.Create(context.Background(), &cencori.ChatParams{
+        Model:    model,
+        Messages: messages,
+    })
+    if err != nil {
+        return err
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+    return nil
+}
+```
+
+## Error Response Structure
+
+Errors include detailed information:
+
+```go
+type Error struct {
+    Code    string // Error code (e.g., "invalid_api_key")
+    Message string // Human-readable message
+    Type    string // Error type (e.g., "authentication_error")
+    Param   string // Parameter that caused error (if applicable)
+}
+
+func (e *Error) Error() string {
+    return fmt.Sprintf("cencori: %s: %s", e.Code, e.Message)
+}
+```
+
+## Best Practices
+
+### 1. Always Check Errors
+
+```go
+// Good
+resp, err := client.Chat.Create(ctx, params)
+if err != nil {
+    return err
+}
+
+// Bad
+resp, _ := client.Chat.Create(ctx, params)
+```
+
+### 2. Use Typed Error Checks
+
+```go
+// Good
+if errors.Is(err, cencori.ErrRateLimited) {
+    // Handle rate limit
+}
+
+// Less optimal
+if strings.Contains(err.Error(), "rate limit") {
+    // String matching is fragile
+}
+```
+
+### 3. Add Context to Errors
+
+```go
+resp, err := client.Chat.Create(ctx, params)
+if err != nil {
+    return fmt.Errorf("failed to create chat completion: %w", err)
+}
+```
+
+### 4. Use Context for Cancellation
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+// Cancel on signal
+go func() {
+    <-sigChan
+    cancel()
+}()
+
+resp, err := client.Chat.Create(ctx, params)
+if errors.Is(err, context.Canceled) {
+    log.Println("Request cancelled by user")
+}
+```
+
+### 5. Log Errors with Context
+
+```go
+import "log/slog"
+
+resp, err := client.Chat.Create(ctx, params)
+if err != nil {
+    slog.Error("chat request failed",
+        "error", err,
+        "model", params.Model,
+        "message_count", len(params.Messages),
+    )
+    return err
+}
+```
+
+## Production Error Monitoring
+
+```go
+import (
+    "log/slog"
+    "os"
+)
+
+func productionChat() {
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+    
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        logger.Error("client initialization failed", "error", err)
+        return
+    }
+    
+    ctx := context.Background()
+    
+    resp, err := client.Chat.Create(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    })
+    
+    if err != nil {
+        logger.Error("chat request failed",
+            "error", err,
+            "error_type", getErrorType(err),
+            "model", "gpt-4o",
+        )
+        // Send to error tracking service (Sentry, Rollbar, etc.)
+        return
+    }
+    
+    logger.Info("chat request succeeded",
+        "tokens", resp.Usage.TotalTokens,
+        "cost", resp.CostUSD,
+        "model", resp.Model,
+        "provider", resp.Provider,
+    )
+}
+
+func getErrorType(err error) string {
+    switch {
+    case errors.Is(err, cencori.ErrInvalidAPIKey):
+        return "authentication"
+    case errors.Is(err, cencori.ErrRateLimited):
+        return "rate_limit"
+    case errors.Is(err, cencori.ErrContentFiltered):
+        return "safety_filter"
+    case errors.Is(err, cencori.ErrInsufficientFunds):
+        return "billing"
+    default:
+        return "unknown"
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/sdks/go/quickstart">
+    Back to quickstart guide
+  </Card>
+  <Card title="Chat API" icon="comments" href="/sdks/go/chat">
+    Learn about chat features
+  </Card>
+  <Card title="Streaming" icon="stream" href="/sdks/go/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/go/memory">
+    Add context with RAG
+  </Card>
+</CardGroup>

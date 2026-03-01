@@ -1,0 +1,174 @@
+---
+title: "Python SDK Quickstart"
+description: "Get started with Cencori's Python SDK in minutes. Install the SDK and make your first AI API call."
+---
+
+## Installation
+
+Install the Cencori Python SDK using your preferred package manager:
+
+<CodeGroup>
+```bash pip
+pip install cencori
+```
+
+```bash poetry
+poetry add cencori
+```
+
+```bash pipenv
+pipenv install cencori
+```
+</CodeGroup>
+
+The SDK requires Python 3.8 or higher and uses `httpx` for HTTP requests.
+
+## Authentication
+
+Get your API key from the [Cencori Dashboard](https://cencori.com/dashboard). Your API key starts with `csk_`.
+
+You can pass the API key directly or set it as an environment variable:
+
+<CodeGroup>
+```python Direct
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_...")
+```
+
+```python Environment Variable
+import os
+from cencori import Cencori
+
+# Set CENCORI_API_KEY in your environment
+cencori = Cencori()  # Reads from CENCORI_API_KEY
+```
+
+```bash .env
+# .env file
+CENCORI_API_KEY=csk_...
+```
+</CodeGroup>
+
+## Your First Request
+
+Make your first chat completion request:
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_...")
+
+# Send a chat message
+response = cencori.ai.chat(
+    messages=[{"role": "user", "content": "What is the capital of France?"}],
+    model="gpt-4o"
+)
+
+print(response.content)
+# Paris is the capital of France.
+
+print(f"Cost: ${response.cost_usd:.6f}")
+print(f"Tokens: {response.usage.total_tokens}")
+```
+
+## Response Object
+
+The `ChatResponse` object contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | The AI's response text |
+| `model` | `str` | Model used (e.g., `gpt-4o`) |
+| `provider` | `str` | Provider (e.g., `openai`) |
+| `usage` | `Usage` | Token usage statistics |
+| `cost_usd` | `float` | Request cost in USD |
+| `finish_reason` | `str` | Why the model stopped generating |
+
+```python
+response = cencori.ai.chat(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(f"Model: {response.model}")           # gpt-4o
+print(f"Provider: {response.provider}")     # openai
+print(f"Prompt tokens: {response.usage.prompt_tokens}")
+print(f"Completion tokens: {response.usage.completion_tokens}")
+print(f"Total tokens: {response.usage.total_tokens}")
+```
+
+## Choosing a Model
+
+Cencori supports models from OpenAI, Anthropic, and Google:
+
+```python
+# OpenAI models
+response = cencori.ai.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model="gpt-4o"  # or gpt-4-turbo, gpt-3.5-turbo
+)
+
+# Anthropic models
+response = cencori.ai.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model="claude-3-opus"  # or claude-3-sonnet, claude-3-haiku
+)
+
+# Google models (default)
+response = cencori.ai.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model="gemini-2.5-flash"  # or gemini-2.0-flash
+)
+```
+
+## Configuration Options
+
+Customize the client with optional parameters:
+
+```python
+from cencori import Cencori
+
+cencori = Cencori(
+    api_key="csk_...",
+    base_url="https://cencori.com",  # API base URL
+    timeout=30.0                      # Request timeout in seconds
+)
+```
+
+## Multi-turn Conversations
+
+Build conversations by maintaining message history:
+
+```python
+messages = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "My name is Alice."}
+]
+
+response1 = cencori.ai.chat(messages=messages)
+print(f"Assistant: {response1.content}")
+
+# Add assistant response and continue
+messages.append({"role": "assistant", "content": response1.content})
+messages.append({"role": "user", "content": "What's my name?"})
+
+response2 = cencori.ai.chat(messages=messages)
+print(f"Assistant: {response2.content}")  # Alice
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/python/chat">
+    Learn about advanced chat features and parameters
+  </Card>
+  <Card title="Streaming" icon="bolt" href="/sdks/python/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Memory & RAG" icon="database" href="/sdks/python/memory">
+    Build context-aware applications
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/python/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

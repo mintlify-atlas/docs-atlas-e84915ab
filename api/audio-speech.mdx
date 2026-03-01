@@ -1,0 +1,455 @@
+---
+title: 'Text-to-Speech'
+description: 'POST /api/ai/audio/speech - Convert text to speech audio'
+---
+
+## Endpoint
+
+```
+POST https://api.cencori.com/api/ai/audio/speech
+```
+
+Convert text to natural-sounding speech using OpenAI TTS models. Returns audio as a binary stream.
+
+## Authentication
+
+Requires API key in `Authorization` header or `CENCORI_API_KEY` header.
+
+## Request Body
+
+<ParamField body="input" type="string" required>
+  Text to convert to speech.
+  
+  Maximum length: 4096 characters
+</ParamField>
+
+<ParamField body="model" type="string">
+  TTS model to use.
+  
+  Options:
+  - `tts-1` - Fast, lower quality (default)
+  - `tts-1-hd` - Higher quality, slower
+</ParamField>
+
+<ParamField body="voice" type="string">
+  Voice to use for speech generation.
+  
+  Options:
+  - `alloy` - Neutral and balanced (default)
+  - `echo` - Warm and conversational
+  - `fable` - British accent, expressive
+  - `onyx` - Deep and authoritative
+  - `nova` - Friendly and upbeat
+  - `shimmer` - Clear and professional
+</ParamField>
+
+<ParamField body="response_format" type="string">
+  Audio format.
+  
+  Options:
+  - `mp3` (default) - MPEG audio
+  - `opus` - Opus format
+  - `aac` - AAC format
+  - `flac` - FLAC format
+  - `wav` - WAV format
+  - `pcm` - Raw PCM
+</ParamField>
+
+<ParamField body="speed" type="number">
+  Playback speed (0.25 to 4.0).
+  
+  Default: `1.0`
+  
+  - `0.5` = Half speed
+  - `1.0` = Normal speed
+  - `2.0` = Double speed
+</ParamField>
+
+## Response
+
+Returns audio file as binary data.
+
+**Content-Type:** Based on `response_format`
+- `audio/mpeg` for mp3
+- `audio/opus` for opus
+- `audio/aac` for aac
+- `audio/flac` for flac
+- `audio/wav` for wav
+- `audio/pcm` for pcm
+
+**Headers:**
+- `Content-Type`: Audio MIME type
+- `Content-Length`: File size in bytes
+- `X-Request-Id`: Request tracking ID
+
+## Examples
+
+### Basic Text-to-Speech
+
+```bash
+curl https://api.cencori.com/api/ai/audio/speech \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1",
+    "input": "Hello! Welcome to Cencori.",
+    "voice": "alloy"
+  }' \
+  --output speech.mp3
+```
+
+### High Quality with Custom Voice
+
+```bash
+curl https://api.cencori.com/api/ai/audio/speech \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "input": "This is a professional announcement.",
+    "voice": "onyx",
+    "response_format": "opus"
+  }' \
+  --output speech.opus
+```
+
+### Faster Playback Speed
+
+```bash
+curl https://api.cencori.com/api/ai/audio/speech \
+  -H "Authorization: Bearer $CENCORI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1",
+    "input": "Speeding up this narration.",
+    "voice": "nova",
+    "speed": 1.5
+  }' \
+  --output speech.mp3
+```
+
+### Using OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseURL: 'https://api.cencori.com/v1'
+});
+
+const mp3 = await client.audio.speech.create({
+  model: 'tts-1',
+  voice: 'alloy',
+  input: 'Today is a wonderful day!'
+});
+
+const buffer = Buffer.from(await mp3.arrayBuffer());
+fs.writeFileSync('speech.mp3', buffer);
+```
+
+### Stream Audio to Browser
+
+```typescript
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  const { text } = await req.json();
+  
+  const response = await fetch('https://api.cencori.com/api/ai/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.CENCORI_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      voice: 'alloy',
+      input: text
+    })
+  });
+  
+  const audioBuffer = await response.arrayBuffer();
+  
+  return new NextResponse(audioBuffer, {
+    headers: {
+      'Content-Type': 'audio/mpeg',
+      'Content-Disposition': 'inline; filename="speech.mp3"'
+    }
+  });
+}
+```
+
+### Long Text with Chunks
+
+```typescript
+// Split long text into chunks
+function chunkText(text: string, maxLength: number = 4000): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const chunks: string[] = [];
+  let currentChunk = '';
+  
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxLength) {
+      chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    } else {
+      currentChunk += sentence;
+    }
+  }
+  
+  if (currentChunk) chunks.push(currentChunk.trim());
+  return chunks;
+}
+
+// Generate speech for each chunk
+const longText = "Very long text...";
+const chunks = chunkText(longText);
+
+for (let i = 0; i < chunks.length; i++) {
+  const mp3 = await client.audio.speech.create({
+    model: 'tts-1',
+    voice: 'alloy',
+    input: chunks[i]
+  });
+  
+  const buffer = Buffer.from(await mp3.arrayBuffer());
+  fs.writeFileSync(`speech_part${i + 1}.mp3`, buffer);
+}
+```
+
+### Compare All Voices
+
+```typescript
+const voices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+const text = 'Hello, this is a voice comparison test.';
+
+for (const voice of voices) {
+  const mp3 = await client.audio.speech.create({
+    model: 'tts-1',
+    voice,
+    input: text
+  });
+  
+  const buffer = Buffer.from(await mp3.arrayBuffer());
+  fs.writeFileSync(`voice_${voice}.mp3`, buffer);
+}
+```
+
+## Voice Characteristics
+
+| Voice | Gender | Accent | Tone | Best For |
+|-------|--------|--------|------|----------|
+| alloy | Neutral | American | Balanced | General purpose |
+| echo | Male | American | Warm | Storytelling |
+| fable | Female | British | Expressive | Narration |
+| onyx | Male | American | Deep | Announcements |
+| nova | Female | American | Upbeat | Marketing |
+| shimmer | Female | American | Professional | Business |
+
+## Use Cases
+
+### Audiobooks
+
+```typescript
+const chapters = ['Chapter 1 text...', 'Chapter 2 text...'];
+
+for (let i = 0; i < chapters.length; i++) {
+  const mp3 = await client.audio.speech.create({
+    model: 'tts-1-hd',
+    voice: 'fable',
+    input: chapters[i],
+    speed: 0.9  // Slightly slower for audiobooks
+  });
+  
+  const buffer = Buffer.from(await mp3.arrayBuffer());
+  fs.writeFileSync(`chapter_${i + 1}.mp3`, buffer);
+}
+```
+
+### Podcast Intros
+
+```typescript
+const intro = await client.audio.speech.create({
+  model: 'tts-1-hd',
+  voice: 'echo',
+  input: 'Welcome to the Tech Insights Podcast. Your weekly dose of innovation and discovery.'
+});
+```
+
+### Accessibility Features
+
+```typescript
+// Read webpage content aloud
+async function textToSpeech(element: HTMLElement) {
+  const text = element.innerText;
+  
+  const response = await fetch('/api/tts', {
+    method: 'POST',
+    body: JSON.stringify({ text })
+  });
+  
+  const audioBlob = await response.blob();
+  const audioUrl = URL.createObjectURL(audioBlob);
+  
+  const audio = new Audio(audioUrl);
+  audio.play();
+}
+```
+
+### Voice Notifications
+
+```typescript
+const notification = await client.audio.speech.create({
+  model: 'tts-1',
+  voice: 'nova',
+  input: 'You have 3 new messages waiting.'
+});
+```
+
+### Learning Apps
+
+```typescript
+// Language learning pronunciation
+const phrases = [
+  { text: 'Hello', lang: 'en' },
+  { text: 'Bonjour', lang: 'fr' },
+  { text: 'Hola', lang: 'es' }
+];
+
+for (const phrase of phrases) {
+  const mp3 = await client.audio.speech.create({
+    model: 'tts-1-hd',
+    voice: 'alloy',
+    input: phrase.text
+  });
+  
+  const buffer = Buffer.from(await mp3.arrayBuffer());
+  fs.writeFileSync(`${phrase.lang}_${phrase.text}.mp3`, buffer);
+}
+```
+
+## Best Practices
+
+1. **Choose the right model**
+   - Use `tts-1` for most use cases (faster, cheaper)
+   - Use `tts-1-hd` for high-quality production audio
+
+2. **Select appropriate voice**
+   - Test different voices for your use case
+   - Match voice gender/tone to content
+   - Consider audience preferences
+
+3. **Optimize text input**
+   - Use proper punctuation for natural pauses
+   - Break long texts into sentences
+   - Add commas for breathing room
+
+4. **Handle long texts**
+   - Split texts over 4096 characters
+   - Split at sentence boundaries
+   - Concatenate audio files if needed
+
+5. **Cache generated audio**
+   - Store frequently used phrases
+   - Reduce API calls and costs
+   - Improve response times
+
+6. **Format selection**
+   - Use `mp3` for web and mobile (best compatibility)
+   - Use `opus` for streaming (better compression)
+   - Use `wav` for editing (uncompressed)
+
+## Limitations
+
+- Maximum input: 4096 characters per request
+- English language only (best quality)
+- No custom voice training
+- No emotion/tone control beyond voice selection
+- Generated audio cannot be used for prohibited content
+
+## Error Responses
+
+### Input Too Long
+
+```json
+{
+  "error": "bad_request",
+  "message": "Input text exceeds maximum length of 4096 characters"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Split text into smaller chunks.
+
+### Missing Input
+
+```json
+{
+  "error": "bad_request",
+  "message": "Input text is required"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Provide text in the `input` field.
+
+### Provider Not Configured
+
+```json
+{
+  "error": "provider_not_configured",
+  "message": "No OpenAI API key configured"
+}
+```
+
+HTTP Status: `400`
+
+**Solution:** Add OpenAI API key in project settings.
+
+## Rate Limits
+
+TTS requests count toward monthly quota:
+
+- Free: 1,000 requests/month
+- Pro: 50,000 requests/month
+- Enterprise: Custom limits
+
+## Pricing
+
+Pricing based on character count:
+
+| Model | Provider Cost | Cencori Charge |
+|-------|--------------|----------------|
+| tts-1 | $15/1M characters | $18/1M characters |
+| tts-1-hd | $30/1M characters | $36/1M characters |
+
+**Examples:**
+- 100 characters: $0.0018 (tts-1)
+- 1000 characters: $0.018 (tts-1)
+- 100 characters: $0.0036 (tts-1-hd)
+
+## List Available Options
+
+```bash
+curl https://api.cencori.com/api/ai/audio/speech \
+  -H "Authorization: Bearer $CENCORI_API_KEY"
+```
+
+```json
+{
+  "models": ["tts-1", "tts-1-hd"],
+  "voices": [
+    { "id": "alloy", "description": "Neutral and balanced" },
+    { "id": "echo", "description": "Warm and conversational" },
+    { "id": "fable", "description": "British accent, expressive" },
+    { "id": "onyx", "description": "Deep and authoritative" },
+    { "id": "nova", "description": "Friendly and upbeat" },
+    { "id": "shimmer", "description": "Clear and professional" }
+  ],
+  "formats": ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+}
+```

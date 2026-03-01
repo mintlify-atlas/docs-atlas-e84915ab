@@ -1,0 +1,530 @@
+---
+title: Error Handling Patterns
+description: Handle errors gracefully with retry logic, circuit breakers, and custom error types
+---
+
+# Error Handling Patterns
+
+Cencori provides structured error handling with custom error types, automatic retries, and circuit breakers.
+
+## Error Types
+
+Cencori defines these error classes for better error handling:
+
+```typescript packages/sdk/src/errors.ts
+export class CencoriError extends Error {
+  constructor(
+    message: string,
+    public statusCode?: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'CencoriError';
+  }
+}
+
+export class AuthenticationError extends CencoriError {
+  constructor(message = 'Invalid API key') {
+    super(message, 401, 'INVALID_API_KEY');
+  }
+}
+
+export class RateLimitError extends CencoriError {
+  constructor(message = 'Rate limit exceeded') {
+    super(message, 429, 'RATE_LIMIT_EXCEEDED');
+  }
+}
+
+export class SafetyError extends CencoriError {
+  constructor(
+    message = 'Content safety violation',
+    public reasons?: string[]
+  ) {
+    super(message, 400, 'SAFETY_VIOLATION');
+  }
+}
+```
+
+## Python Error Types
+
+```python packages/python-sdk/src/cencori/errors.py
+class CencoriError(Exception):
+    """Base exception for Cencori SDK errors."""
+    def __init__(self, message: str, status_code: int = None, code: str = None):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+        self.code = code
+
+class AuthenticationError(CencoriError):
+    """Raised when API key is invalid or missing."""
+    def __init__(self, message: str = "Invalid API key"):
+        super().__init__(message, status_code=401, code="INVALID_API_KEY")
+
+class RateLimitError(CencoriError):
+    """Raised when rate limit is exceeded."""
+    def __init__(self, message: str = "Rate limit exceeded"):
+        super().__init__(message, status_code=429, code="RATE_LIMIT_EXCEEDED")
+
+class SafetyError(CencoriError):
+    """Raised when content violates safety policies."""
+    def __init__(self, message: str = "Content safety violation", reasons: list = None):
+        super().__init__(message, status_code=400, code="SAFETY_VIOLATION")
+        self.reasons = reasons or []
+```
+
+## Basic Error Handling
+
+<CodeGroup>
+
+```typescript TypeScript
+import { 
+  Cencori, 
+  AuthenticationError, 
+  RateLimitError, 
+  SafetyError 
+} from '@cencori/sdk';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+async function handleChat(message: string) {
+  try {
+    const response = await cencori.ai.chat({
+      messages: [{ role: 'user', content: message }],
+      model: 'gpt-4o'
+    });
+    return response.content;
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      console.error('Invalid API key:', error.message);
+      // Refresh or request new API key
+    } else if (error instanceof RateLimitError) {
+      console.error('Rate limited:', error.message);
+      // Implement backoff and retry
+    } else if (error instanceof SafetyError) {
+      console.error('Content blocked:', error.reasons);
+      // Log incident and notify user
+    } else {
+      console.error('Unexpected error:', error);
+    }
+    throw error;
+  }
+}
+```
+
+```python Python
+from cencori import Cencori
+from cencori.errors import (
+    AuthenticationError,
+    RateLimitError,
+    SafetyError,
+    CencoriError
+)
+
+cencori = Cencori(api_key="your-api-key")
+
+def handle_chat(message: str):
+    try:
+        response = cencori.ai.chat(
+            messages=[{"role": "user", "content": message}],
+            model="gpt-4o"
+        )
+        return response.content
+    except AuthenticationError as e:
+        print(f"Invalid API key: {e.message}")
+        # Refresh or request new API key
+    except RateLimitError as e:
+        print(f"Rate limited: {e.message}")
+        # Implement backoff and retry
+    except SafetyError as e:
+        print(f"Content blocked: {e.reasons}")
+        # Log incident and notify user
+    except CencoriError as e:
+        print(f"Cencori error: {e.message}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise
+```
+
+</CodeGroup>
+
+## Retry Logic
+
+Implement exponential backoff for transient errors:
+
+```typescript
+class RetryHandler {
+  async withRetry<T>(
+    fn: () => Promise<T>,
+    options: {
+      maxRetries?: number;
+      initialDelay?: number;
+      maxDelay?: number;
+      backoffMultiplier?: number;
+    } = {}
+  ): Promise<T> {
+    const {
+      maxRetries = 3,
+      initialDelay = 100,
+      maxDelay = 10000,
+      backoffMultiplier = 2
+    } = options;
+
+    let lastError: Error;
+    let delay = initialDelay;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+
+        // Don't retry on non-retryable errors
+        if (
+          error instanceof AuthenticationError ||
+          error instanceof SafetyError
+        ) {
+          throw error;
+        }
+
+        // Don't retry on last attempt
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        console.log(
+          `Attempt ${attempt + 1}/${maxRetries + 1} failed. ` +
+          `Retrying in ${delay}ms...`
+        );
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay = Math.min(delay * backoffMultiplier, maxDelay);
+      }
+    }
+
+    throw lastError!;
+  }
+}
+
+// Usage
+const retry = new RetryHandler();
+
+const response = await retry.withRetry(
+  () => cencori.ai.chat({
+    messages: [{ role: 'user', content: 'Hello' }],
+    model: 'gpt-4o'
+  }),
+  { maxRetries: 3, initialDelay: 1000 }
+);
+```
+
+## Circuit Breaker
+
+Cencori implements circuit breakers to prevent cascading failures:
+
+```typescript lib/providers/circuit-breaker.ts
+const circuitState = new Map<string, {
+  failures: number;
+  lastFailure: number;
+  state: 'closed' | 'open' | 'half-open';
+}>();
+
+const FAILURE_THRESHOLD = 5;
+const CIRCUIT_TIMEOUT = 60000; // 1 minute
+
+export async function isCircuitOpen(provider: string): Promise<boolean> {
+  const circuit = circuitState.get(provider);
+  
+  if (!circuit) return false;
+  if (circuit.state === 'closed') return false;
+  
+  // Check if circuit should move to half-open
+  if (
+    circuit.state === 'open' &&
+    Date.now() - circuit.lastFailure > CIRCUIT_TIMEOUT
+  ) {
+    circuit.state = 'half-open';
+    return false;
+  }
+  
+  return circuit.state === 'open';
+}
+
+export async function recordSuccess(provider: string): Promise<void> {
+  const circuit = circuitState.get(provider);
+  
+  if (circuit) {
+    circuit.failures = 0;
+    circuit.state = 'closed';
+  }
+}
+
+export async function recordFailure(provider: string): Promise<void> {
+  let circuit = circuitState.get(provider);
+  
+  if (!circuit) {
+    circuit = { failures: 0, lastFailure: 0, state: 'closed' };
+    circuitState.set(provider, circuit);
+  }
+  
+  circuit.failures++;
+  circuit.lastFailure = Date.now();
+  
+  if (circuit.failures >= FAILURE_THRESHOLD) {
+    circuit.state = 'open';
+    console.log(`[Circuit Breaker] ${provider} circuit opened`);
+  }
+}
+```
+
+## Error Recovery Strategies
+
+### Automatic Failover
+
+```typescript
+async function chatWithFailover(messages: any[]) {
+  const providers = ['openai', 'anthropic', 'google'];
+  let lastError: Error;
+
+  for (const provider of providers) {
+    try {
+      const model = getModelForProvider(provider);
+      const response = await cencori.ai.chat({
+        messages,
+        model
+      });
+      return response;
+    } catch (error) {
+      console.warn(`Provider ${provider} failed:`, error);
+      lastError = error as Error;
+      continue;
+    }
+  }
+
+  throw lastError!;
+}
+
+function getModelForProvider(provider: string): string {
+  const models: Record<string, string> = {
+    openai: 'gpt-4o',
+    anthropic: 'claude-3-5-sonnet',
+    google: 'gemini-2.5-flash'
+  };
+  return models[provider];
+}
+```
+
+### Graceful Degradation
+
+```typescript
+async function chatWithDegradation(message: string) {
+  try {
+    // Try premium model
+    return await cencori.ai.chat({
+      messages: [{ role: 'user', content: message }],
+      model: 'gpt-4o'
+    });
+  } catch (error) {
+    console.warn('Premium model failed, falling back to fast model');
+    
+    try {
+      // Fallback to cheaper/faster model
+      return await cencori.ai.chat({
+        messages: [{ role: 'user', content: message }],
+        model: 'gemini-2.0-flash'
+      });
+    } catch (fallbackError) {
+      // Return cached or default response
+      return {
+        content: 'Service temporarily unavailable. Please try again.',
+        model: 'fallback',
+        usage: { promptTokens: 0, completionTokens: 0 }
+      };
+    }
+  }
+}
+```
+
+## Provider Error Normalization
+
+```typescript lib/providers/errors.ts
+export function normalizeProviderError(
+  provider: string,
+  error: any
+): CencoriError {
+  // OpenAI errors
+  if (error.status === 401) {
+    return new AuthenticationError(`${provider} API key invalid`);
+  }
+  if (error.status === 429) {
+    return new RateLimitError(
+      `${provider} rate limit exceeded: ${error.message}`
+    );
+  }
+  if (error.status === 400 && error.code === 'content_filter') {
+    return new SafetyError('Content blocked by provider');
+  }
+  
+  // Anthropic errors
+  if (error.type === 'invalid_request_error') {
+    return new CencoriError(error.message, 400, 'INVALID_REQUEST');
+  }
+  
+  // Gemini errors
+  if (error.message?.includes('API key')) {
+    return new AuthenticationError();
+  }
+  
+  // Generic error
+  return new CencoriError(
+    error.message || 'Provider error',
+    error.status || 500,
+    'PROVIDER_ERROR'
+  );
+}
+```
+
+## Monitoring and Alerting
+
+```typescript
+class ErrorMonitor {
+  private errorCounts = new Map<string, number>();
+  private alertThreshold = 10;
+
+  trackError(error: Error) {
+    const errorType = error.constructor.name;
+    const count = (this.errorCounts.get(errorType) || 0) + 1;
+    this.errorCounts.set(errorType, count);
+
+    if (count >= this.alertThreshold) {
+      this.sendAlert(errorType, count);
+    }
+
+    // Log to monitoring service
+    console.error({
+      type: errorType,
+      message: error.message,
+      stack: error.stack,
+      count
+    });
+  }
+
+  private sendAlert(errorType: string, count: number) {
+    console.error(
+      `ALERT: ${errorType} occurred ${count} times. Investigation needed.`
+    );
+    // Send to alerting service (PagerDuty, Slack, etc.)
+  }
+
+  getErrorStats() {
+    return Object.fromEntries(this.errorCounts);
+  }
+}
+
+const monitor = new ErrorMonitor();
+
+try {
+  await cencori.ai.chat({ messages, model: 'gpt-4o' });
+} catch (error) {
+  monitor.trackError(error as Error);
+  throw error;
+}
+```
+
+## Best Practices
+
+<Steps>
+
+1. **Use Specific Error Types**
+   
+   Catch and handle specific error types instead of generic errors:
+   ```typescript
+   try {
+     // API call
+   } catch (error) {
+     if (error instanceof RateLimitError) {
+       // Handle rate limit
+     } else if (error instanceof SafetyError) {
+       // Handle safety violation
+     }
+   }
+   ```
+
+2. **Implement Exponential Backoff**
+   
+   Wait progressively longer between retries to avoid overwhelming services.
+
+3. **Set Timeout Limits**
+   
+   Prevent indefinite waiting:
+   ```typescript
+   const timeout = new Promise((_, reject) =>
+     setTimeout(() => reject(new Error('Timeout')), 30000)
+   );
+   const result = await Promise.race([apiCall(), timeout]);
+   ```
+
+4. **Log Errors Properly**
+   
+   Include context for debugging:
+   ```typescript
+   console.error({
+     timestamp: new Date().toISOString(),
+     error: error.message,
+     context: { userId, requestId, model },
+     stack: error.stack
+   });
+   ```
+
+5. **Monitor Error Rates**
+   
+   Track error rates and set up alerts for anomalies.
+
+</Steps>
+
+## Testing Error Scenarios
+
+```typescript
+describe('Error Handling', () => {
+  it('should handle rate limit errors', async () => {
+    // Mock rate limit response
+    const error = new RateLimitError();
+    
+    await expect(
+      handleChat('test message')
+    ).rejects.toThrow(RateLimitError);
+  });
+
+  it('should retry on transient errors', async () => {
+    let attempts = 0;
+    const fn = async () => {
+      attempts++;
+      if (attempts < 3) throw new Error('Transient');
+      return 'success';
+    };
+
+    const result = await retry.withRetry(fn);
+    expect(result).toBe('success');
+    expect(attempts).toBe(3);
+  });
+
+  it('should not retry on auth errors', async () => {
+    const fn = async () => {
+      throw new AuthenticationError();
+    };
+
+    await expect(
+      retry.withRetry(fn)
+    ).rejects.toThrow(AuthenticationError);
+  });
+});
+```
+
+## Next Steps
+
+- [Rate Limiting](/guides/rate-limiting) - Handle rate limits effectively
+- [Multi-Provider](/guides/multi-provider) - Implement failover strategies
+- [Cost Optimization](/guides/cost-optimization) - Optimize for reliability and cost

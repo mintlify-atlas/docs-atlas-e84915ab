@@ -1,0 +1,349 @@
+---
+title: TypeScript Quickstart
+description: Get started with the Cencori TypeScript SDK in 5 minutes
+---
+
+# TypeScript Quickstart
+
+Get up and running with the Cencori TypeScript SDK in under 5 minutes. This guide covers installation, authentication, and your first API call.
+
+## Installation
+
+Install the SDK using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install cencori
+```
+
+```bash yarn
+yarn add cencori
+```
+
+```bash pnpm
+pnpm add cencori
+```
+
+```bash bun
+bun add cencori
+```
+</CodeGroup>
+
+## Authentication
+
+Set your API key as an environment variable:
+
+```bash
+export CENCORI_API_KEY=csk_...
+```
+
+Get your API key from the [Cencori Dashboard](https://cencori.com/dashboard/settings/api-keys).
+
+## Quick Example
+
+Here's a complete example that sends a chat message:
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is Cencori?' }
+  ]
+});
+
+console.log(response.content);
+console.log('Tokens used:', response.usage.totalTokens);
+```
+
+<Check>That's it! You've made your first API call with Cencori.</Check>
+
+## Core Concepts
+
+### Unified Client
+
+The `Cencori` class provides access to all infrastructure primitives:
+
+```typescript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+// AI Gateway - Chat, completions, embeddings
+await cencori.ai.chat({ model: 'gpt-4o', messages });
+
+// Memory - Vector storage for RAG
+await cencori.memory.search({ namespace: 'docs', query: '...' });
+
+// Telemetry - Report web traffic
+await cencori.telemetry.reportWebRequest({ host, method, path });
+
+// Compute (coming soon)
+await cencori.compute.run('function-name', { input });
+
+// Workflow (coming soon)
+await cencori.workflow.trigger('pipeline-id', { data });
+```
+
+### Type Safety
+
+The SDK is fully typed with TypeScript:
+
+```typescript
+import type { 
+  ChatRequest, 
+  ChatResponse,
+  ChatMessage 
+} from 'cencori';
+
+const messages: ChatMessage[] = [
+  { role: 'user', content: 'Hello!' }
+];
+
+const response: ChatResponse = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages,
+  temperature: 0.7,
+  maxTokens: 1000
+});
+
+// Fully typed response
+console.log(response.content);           // string
+console.log(response.usage.totalTokens); // number
+console.log(response.finishReason);      // 'stop' | 'length' | 'tool_calls' | 'content_filter'
+```
+
+## Common Use Cases
+
+### Chat Completion
+
+Send messages and get AI responses:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful coding assistant.' },
+    { role: 'user', content: 'Explain async/await in JavaScript' }
+  ],
+  temperature: 0.7,
+  maxTokens: 500
+});
+
+console.log(response.content);
+```
+
+### Streaming Responses
+
+Stream tokens as they're generated:
+
+```typescript
+for await (const chunk of cencori.ai.chatStream({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Write a story' }]
+})) {
+  process.stdout.write(chunk.delta);
+}
+```
+
+### Embeddings
+
+Generate vector embeddings for text:
+
+```typescript
+const response = await cencori.ai.embeddings({
+  model: 'text-embedding-3-small',
+  input: 'Cencori is a unified AI infrastructure platform'
+});
+
+console.log(response.embeddings[0]); // number[] (1536 dimensions)
+```
+
+### RAG (Retrieval-Augmented Generation)
+
+Chat with automatic context retrieval:
+
+```typescript
+// First, store some context
+await cencori.memory.store({
+  namespace: 'company-docs',
+  content: 'Cencori provides AI Gateway, Compute, Workflow, and Storage.',
+  metadata: { source: 'overview.md' }
+});
+
+// Then query with automatic RAG
+const response = await cencori.ai.rag({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'What does Cencori provide?' }],
+  namespace: 'company-docs',
+  limit: 5
+});
+
+console.log(response.message.content);
+console.log('Sources:', response.sources);
+```
+
+## Framework Integrations
+
+### Vercel AI SDK
+
+Use Cencori with `streamText()`, `generateText()`, and `useChat()`:
+
+```typescript
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: cencori('gpt-4o'),
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+for await (const chunk of result.textStream) {
+  process.stdout.write(chunk);
+}
+```
+
+Learn more in the [Vercel AI SDK Integration](/integrations/vercel-ai) guide.
+
+### Next.js API Route
+
+Create a chat endpoint:
+
+```typescript app/api/chat/route.ts
+import { Cencori } from 'cencori';
+import { NextResponse } from 'next/server';
+
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const response = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages
+  });
+
+  return NextResponse.json(response);
+}
+```
+
+### Express.js API
+
+Create a chat endpoint with Express:
+
+```typescript
+import express from 'express';
+import { Cencori } from 'cencori';
+
+const app = express();
+const cencori = new Cencori({ apiKey: process.env.CENCORI_API_KEY });
+
+app.use(express.json());
+
+app.post('/api/chat', async (req, res) => {
+  const { messages } = req.body;
+
+  const response = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages
+  });
+
+  res.json(response);
+});
+
+app.listen(3000);
+```
+
+## Error Handling
+
+Handle errors with type-safe error classes:
+
+```typescript
+import { 
+  CencoriError, 
+  AuthenticationError, 
+  RateLimitError,
+  SafetyError 
+} from 'cencori';
+
+try {
+  const response = await cencori.ai.chat({
+    model: 'gpt-4o',
+    messages
+  });
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    console.error('Invalid API key:', error.message);
+  } else if (error instanceof RateLimitError) {
+    console.error('Rate limit exceeded:', error.message);
+  } else if (error instanceof SafetyError) {
+    console.error('Content safety violation:', error.reasons);
+  } else if (error instanceof CencoriError) {
+    console.error('API error:', error.message, error.statusCode);
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+Learn more in the [Error Handling](/sdks/typescript/error-handling) guide.
+
+## Configuration
+
+### Custom Base URL
+
+```typescript
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY,
+  baseUrl: 'https://api.cencori.com'
+});
+```
+
+### Custom Headers
+
+```typescript
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY,
+  headers: {
+    'X-Custom-Header': 'value',
+    'User-Agent': 'my-app/1.0'
+  }
+});
+```
+
+### TypeScript Configuration
+
+Ensure your `tsconfig.json` supports modern ESM:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020"],
+    "types": ["node"]
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/typescript/chat">
+    Learn about chat completions, multimodal, and tool calling
+  </Card>
+  <Card title="Streaming" icon="water" href="/sdks/typescript/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/typescript/memory">
+    Build RAG applications with vector storage
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/typescript/error-handling">
+    Handle errors gracefully in production
+  </Card>
+</CardGroup>

@@ -1,0 +1,346 @@
+---
+title: 'Google Gemini Provider Setup'
+description: 'Configure Google Gemini models in Cencori'
+---
+
+# Google Gemini Provider Setup
+
+Add your Google API key to Cencori to access Gemini models through the AI Gateway.
+
+## Adding Your Google API Key
+
+<Steps>
+  <Step title="Get your Google AI API key">
+    If you don't have a Google AI API key:
+    
+    1. Go to [aistudio.google.com](https://aistudio.google.com/app/apikey)
+    2. Sign in with your Google account
+    3. Click **Create API Key**
+    4. Select or create a Google Cloud project
+    5. Copy the API key
+  </Step>
+
+  <Step title="Add key to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    1. Go to **Settings** > **Providers**
+    2. Click **Add Provider**
+    3. Select **Google Gemini**
+    4. Paste your Google AI API key
+    5. Click **Save**
+  </Step>
+
+  <Step title="Test the connection">
+    Cencori will automatically test your API key to ensure it's valid.
+  </Step>
+</Steps>
+
+## Available Models
+
+Once configured, you can use any Google Gemini model:
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `gemini-2.5-flash` | Latest fast model | Real-time, high-volume |
+| `gemini-3-pro` | Most capable | Complex reasoning |
+| `gemini-2.0-flash` | Previous generation | Legacy apps |
+| `gemini-1.5-pro` | Long context | Document analysis |
+| `gemini-1.5-flash` | Fast and affordable | Cost-sensitive tasks |
+
+## Usage Examples
+
+### Using the SDK
+
+<CodeGroup>
+```typescript TypeScript
+import { Cencori } from 'cencori';
+
+const cencori = new Cencori({
+  apiKey: process.env.CENCORI_API_KEY
+});
+
+const response = await cencori.ai.chat({
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+console.log(response.content);
+```
+
+```python Python
+from cencori import Cencori
+
+cencori = Cencori(api_key="csk_your_key")
+
+response = cencori.ai.chat(
+    model="gemini-2.5-flash",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.content)
+```
+
+```bash cURL
+curl https://api.cencori.com/v1/chat/completions \
+  -H "Authorization: Bearer csk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-2.5-flash",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+</CodeGroup>
+
+### Streaming Responses
+
+<CodeGroup>
+```typescript TypeScript
+const stream = cencori.ai.chatStream({
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Tell me about AI' }]
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.delta);
+}
+```
+
+```python Python
+for chunk in cencori.ai.chat_stream(
+    model="gemini-2.5-flash",
+    messages=[{"role": "user", "content": "Tell me about AI"}]
+):
+    print(chunk.delta, end="", flush=True)
+```
+</CodeGroup>
+
+### With Vercel AI SDK
+
+```typescript
+import { cencori } from 'cencori/vercel';
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: cencori('gemini-2.5-flash'),
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+## Model Selection Guide
+
+### When to use Gemini 2.5 Flash
+
+- Real-time applications
+- High-volume requests
+- Cost-sensitive use cases
+- Quick responses needed
+
+### When to use Gemini 3 Pro
+
+- Complex reasoning tasks
+- Advanced analysis
+- When you need the most capable model
+- Research and technical work
+
+### When to use Gemini 1.5 Pro
+
+- Long document analysis
+- Large context windows (1M+ tokens)
+- Multi-modal tasks (text + images)
+- Code understanding and generation
+
+## Pricing
+
+Gemini models are extremely cost-effective:
+
+| Model | Input (per 1K tokens) | Output (per 1K tokens) |
+|-------|----------------------|-----------------------|
+| gemini-2.5-flash | $0.000075 | $0.0003 |
+| gemini-3-pro | $0.0015 | $0.006 |
+| gemini-2.0-flash | $0.000075 | $0.0003 |
+| gemini-1.5-pro | $0.00125 | $0.005 |
+| gemini-1.5-flash | $0.000075 | $0.0003 |
+
+View real-time costs in your [Cencori Dashboard](https://cencori.com/dashboard).
+
+## Features You Get
+
+When using Google Gemini through Cencori:
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield">
+    Automatic PII detection and content filtering
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Real-time analytics and performance metrics
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign">
+    Detailed cost breakdown per request
+  </Card>
+  <Card title="Audit Logs" icon="file-lines">
+    Complete history of all requests
+  </Card>
+</CardGroup>
+
+## Advanced Configuration
+
+### Temperature and Parameters
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Write a creative story' }],
+  temperature: 0.9,  // More creative
+  maxTokens: 2048
+});
+```
+
+### System Instructions
+
+Gemini uses system messages for guidance:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gemini-2.5-flash',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are a helpful coding assistant. Write clean Python code.'
+    },
+    {
+      role: 'user',
+      content: 'Create a function to sort a list'
+    }
+  ]
+});
+```
+
+### Long Context (1M+ tokens)
+
+Gemini 1.5 Pro supports extremely long context:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gemini-1.5-pro',
+  messages: [
+    {
+      role: 'user',
+      content: `Analyze these documents: ${massiveDataset}`
+    }
+  ],
+  maxTokens: 8192
+});
+```
+
+## Multi-Modal Support
+
+Gemini models support text and images (coming soon to Cencori):
+
+```typescript
+// Coming soon
+const response = await cencori.ai.chat({
+  model: 'gemini-1.5-pro',
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is in this image?' },
+        { type: 'image_url', image_url: 'https://...' }
+      ]
+    }
+  ]
+});
+```
+
+## Troubleshooting
+
+### Invalid API Key
+
+If you see authentication errors:
+
+1. Verify your API key is from [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Check that the key is active and not restricted
+3. Ensure you've added it to Cencori, not using it directly
+
+### Rate Limits
+
+Google Gemini has generous free tier limits:
+
+- **Free tier**: 15 requests per minute, 1,500 requests per day
+- **Paid tier**: 360 requests per minute
+
+View your quota in [Google Cloud Console](https://console.cloud.google.com/iam-admin/quotas).
+
+### Model Not Available
+
+Some models may require:
+
+- Enabling the Gemini API in Google Cloud Console
+- Upgrading to a paid Google Cloud account
+- Regional availability (some models may not be available in all regions)
+
+## Best Practices
+
+### Use Flash for Speed
+
+Gemini Flash models are extremely fast and cost-effective:
+
+```typescript
+// For high-volume, real-time use cases
+const response = await cencori.ai.chat({
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Quick question' }]
+});
+```
+
+### Use Pro for Reasoning
+
+For complex tasks, use Gemini 3 Pro:
+
+```typescript
+// For complex reasoning and analysis
+const response = await cencori.ai.chat({
+  model: 'gemini-3-pro',
+  messages: [{ role: 'user', content: 'Explain quantum entanglement' }]
+});
+```
+
+### Leverage Long Context
+
+Gemini 1.5 Pro excels at long documents:
+
+```typescript
+const response = await cencori.ai.chat({
+  model: 'gemini-1.5-pro',
+  messages: [
+    { role: 'user', content: `Summarize: ${longDocument}` }
+  ]
+});
+```
+
+## Free Tier
+
+Gemini has a generous free tier:
+
+- No credit card required to start
+- 15 RPM, 1,500 RPD for Flash models
+- Perfect for prototyping and development
+
+Start using Gemini today in your [Cencori Dashboard](https://cencori.com/dashboard).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about the AI Gateway
+  </Card>
+  <Card title="Vercel AI SDK" icon="triangle" href="/integrations/vercel-ai-sdk">
+    Use with Vercel AI SDK
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your usage
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full API documentation
+  </Card>
+</CardGroup>

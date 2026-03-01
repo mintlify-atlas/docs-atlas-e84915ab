@@ -1,0 +1,295 @@
+---
+title: 'CrewAI Integration'
+description: 'Use Cencori with CrewAI for building multi-agent AI systems'
+---
+
+# CrewAI Integration
+
+Cencori integrates with CrewAI by setting the OpenAI API base URL. This allows you to track all your CrewAI agent interactions through Cencori's dashboard with full observability and cost tracking.
+
+## How It Works
+
+CrewAI uses OpenAI's SDK under the hood. By setting the `OPENAI_API_BASE` environment variable to Cencori's gateway, all CrewAI agent calls are automatically routed through Cencori.
+
+## Setup
+
+<Steps>
+  <Step title="Install CrewAI">
+    Install the CrewAI Python package:
+
+    ```bash
+    pip install crewai crewai-tools
+    ```
+  </Step>
+
+  <Step title="Add provider keys to Cencori">
+    In your [Cencori Dashboard](https://cencori.com/dashboard):
+    
+    - Go to **Settings** > **Providers**
+    - Add your OpenAI or other provider API keys
+    - Cencori will use these keys to route requests
+  </Step>
+
+  <Step title="Configure environment variables">
+    Set the base URL to point to Cencori:
+
+    ```bash .env
+    OPENAI_API_BASE=https://api.cencori.com/v1
+    OPENAI_API_KEY=csk_your_cencori_key
+    ```
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Basic Crew
+
+Create a crew with agents that use Cencori:
+
+```python
+import os
+from crewai import Agent, Task, Crew
+
+# Set Cencori as the base URL
+os.environ["OPENAI_API_BASE"] = "https://api.cencori.com/v1"
+os.environ["OPENAI_API_KEY"] = "csk_your_cencori_key"
+
+# Create agents
+researcher = Agent(
+    role="Researcher",
+    goal="Research AI trends",
+    backstory="An expert AI researcher",
+    verbose=True,
+    llm="gpt-4o"
+)
+
+writer = Agent(
+    role="Writer",
+    goal="Write engaging content",
+    backstory="A skilled technical writer",
+    verbose=True,
+    llm="gpt-4o"
+)
+
+# Create tasks
+research_task = Task(
+    description="Research the latest AI trends in 2026",
+    agent=researcher,
+    expected_output="A summary of top 5 AI trends"
+)
+
+write_task = Task(
+    description="Write a blog post about the AI trends",
+    agent=writer,
+    expected_output="A 500-word blog post"
+)
+
+# Create and run crew
+crew = Crew(
+    agents=[researcher, writer],
+    tasks=[research_task, write_task],
+    verbose=True
+)
+
+result = crew.kickoff()
+print(result)
+```
+
+### Multi-Agent Collaboration
+
+Build complex multi-agent systems:
+
+```python
+import os
+from crewai import Agent, Task, Crew, Process
+
+os.environ["OPENAI_API_BASE"] = "https://api.cencori.com/v1"
+os.environ["OPENAI_API_KEY"] = "csk_your_cencori_key"
+
+# Define specialized agents
+data_analyst = Agent(
+    role="Data Analyst",
+    goal="Analyze data patterns",
+    backstory="Expert in data analysis and statistics",
+    llm="gpt-4o"
+)
+
+strategist = Agent(
+    role="Business Strategist",
+    goal="Develop business strategies",
+    backstory="Strategic business consultant",
+    llm="claude-3-opus"
+)
+
+report_writer = Agent(
+    role="Report Writer",
+    goal="Create executive reports",
+    backstory="Professional report writer",
+    llm="gpt-4o"
+)
+
+# Define sequential tasks
+analysis_task = Task(
+    description="Analyze Q4 sales data",
+    agent=data_analyst,
+    expected_output="Data insights and trends"
+)
+
+strategy_task = Task(
+    description="Develop strategy based on analysis",
+    agent=strategist,
+    expected_output="Strategic recommendations"
+)
+
+report_task = Task(
+    description="Create executive summary",
+    agent=report_writer,
+    expected_output="Executive report"
+)
+
+# Run crew with sequential process
+crew = Crew(
+    agents=[data_analyst, strategist, report_writer],
+    tasks=[analysis_task, strategy_task, report_task],
+    process=Process.sequential,
+    verbose=True
+)
+
+result = crew.kickoff()
+```
+
+### Using Tools with CrewAI
+
+Integrate CrewAI tools while routing through Cencori:
+
+```python
+import os
+from crewai import Agent, Task, Crew
+from crewai_tools import SerperDevTool, WebsiteSearchTool
+
+os.environ["OPENAI_API_BASE"] = "https://api.cencori.com/v1"
+os.environ["OPENAI_API_KEY"] = "csk_your_cencori_key"
+
+# Initialize tools
+search_tool = SerperDevTool()
+web_tool = WebsiteSearchTool()
+
+# Create agent with tools
+research_agent = Agent(
+    role="Research Specialist",
+    goal="Research and verify information",
+    backstory="Expert researcher with web access",
+    tools=[search_tool, web_tool],
+    llm="gpt-4o",
+    verbose=True
+)
+
+task = Task(
+    description="Research Cencori's latest features",
+    agent=research_agent,
+    expected_output="Summary of Cencori features"
+)
+
+crew = Crew(
+    agents=[research_agent],
+    tasks=[task]
+)
+
+result = crew.kickoff()
+```
+
+## Supported Models
+
+Use any model available through Cencori:
+
+<CodeGroup>
+```python OpenAI
+agent = Agent(
+    role="Assistant",
+    goal="Help users",
+    backstory="Helpful AI assistant",
+    llm="gpt-4o"  # or gpt-4o-mini, o3, o1
+)
+```
+
+```python Anthropic
+agent = Agent(
+    role="Assistant",
+    goal="Help users",
+    backstory="Helpful AI assistant",
+    llm="claude-3-opus"  # or claude-3-sonnet
+)
+```
+
+```python Google Gemini
+agent = Agent(
+    role="Assistant",
+    goal="Help users",
+    backstory="Helpful AI assistant",
+    llm="gemini-2.5-flash"  # or gemini-3-pro
+)
+```
+</CodeGroup>
+
+## Configuration File
+
+For production, use a configuration file:
+
+```yaml config/agents.yaml
+researcher:
+  role: "Senior Researcher"
+  goal: "Research and analyze information"
+  backstory: "Expert researcher with years of experience"
+  llm: "gpt-4o"
+
+writer:
+  role: "Content Writer"
+  goal: "Create engaging content"
+  backstory: "Professional content creator"
+  llm: "claude-3-opus"
+```
+
+```python
+import os
+import yaml
+from crewai import Agent, Task, Crew
+
+os.environ["OPENAI_API_BASE"] = "https://api.cencori.com/v1"
+os.environ["OPENAI_API_KEY"] = "csk_your_cencori_key"
+
+with open("config/agents.yaml") as f:
+    config = yaml.safe_load(f)
+
+researcher = Agent(**config["researcher"])
+writer = Agent(**config["writer"])
+
+# Continue with tasks and crew setup...
+```
+
+## What You Get
+
+By routing CrewAI through Cencori:
+
+- **Agent Observability** — Track all agent interactions in real-time
+- **Cost Per Agent** — See which agents cost the most
+- **Security** — Automatic PII filtering and content safety
+- **Audit Logs** — Complete history of multi-agent conversations
+- **Multi-Provider** — Use different models for different agents
+- **Performance Metrics** — Latency and token usage per agent
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CrewAI Docs" icon="arrow-up-right-from-square" href="https://docs.crewai.com">
+    Official CrewAI documentation
+  </Card>
+  <Card title="AI Gateway" icon="network-wired" href="/essentials/gateway">
+    Learn about Cencori's AI Gateway
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://cencori.com/dashboard">
+    View your CrewAI metrics
+  </Card>
+  <Card title="Provider Setup" icon="key" href="/integrations/openai">
+    Configure provider API keys
+  </Card>
+</CardGroup>

@@ -1,0 +1,489 @@
+---
+title: 'Streaming Responses'
+description: 'Stream AI responses in real-time with the Go SDK'
+---
+
+## Why Stream?
+
+Streaming provides:
+- **Better UX**: Users see responses as they're generated
+- **Lower latency**: First token arrives faster
+- **Interruptibility**: Cancel mid-stream if needed
+- **Progress feedback**: Show loading states incrementally
+
+## Basic Streaming
+
+Stream responses using the `Stream` method:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    stream, err := client.Chat.Stream(context.Background(), &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Tell me a story"},
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+    
+    // Read chunks from the stream
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+}
+```
+
+## Stream Response Structure
+
+Each chunk contains a delta with incremental content:
+
+```go
+type StreamChunk struct {
+    Choices []struct {
+        Delta struct {
+            Role    string  // Only in first chunk
+            Content string  // Incremental content
+        }
+        FinishReason *string // "stop" on final chunk
+        Index        int
+    }
+    Model    string
+    Provider string
+}
+```
+
+## Complete Streaming Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    ctx := context.Background()
+    
+    stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {
+                Role:    "system",
+                Content: "You are a helpful assistant.",
+            },
+            {
+                Role:    "user",
+                Content: "Tell me a story about AI",
+            },
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    var fullContent string
+    
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            delta := chunk.Choices[0].Delta.Content
+            fullContent += delta
+            
+            // Write incrementally
+            fmt.Print(delta)
+            
+            // Check if stream is complete
+            if chunk.Choices[0].FinishReason != nil {
+                fmt.Printf("\n\nStream finished: %s\n", *chunk.Choices[0].FinishReason)
+            }
+        }
+    }
+    
+    fmt.Printf("\nTotal length: %d characters\n", len(fullContent))
+}
+```
+
+## Streaming with Context Cancellation
+
+Cancel a stream mid-flight:
+
+```go
+func streamWithCancellation() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    // Create cancellable context
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    
+    stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Write a long essay about AI"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    charCount := 0
+    maxChars := 500
+    
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            delta := chunk.Choices[0].Delta.Content
+            fmt.Print(delta)
+            
+            charCount += len(delta)
+            
+            // Cancel after 500 characters
+            if charCount >= maxChars {
+                fmt.Println("\n\n[Cancelled after 500 chars]")
+                cancel()
+                break
+            }
+        }
+    }
+}
+```
+
+## Streaming with Timeout
+
+Set a maximum time for streaming:
+
+```go
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+    "github.com/cencori/cencori-go"
+)
+
+func streamWithTimeout() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    // Stream times out after 10 seconds
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    
+    stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Tell me a story"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+    
+    // Check if context was cancelled due to timeout
+    if ctx.Err() == context.DeadlineExceeded {
+        fmt.Println("\n\nStream timed out")
+    }
+}
+```
+
+## Error Handling in Streams
+
+Handle errors during streaming:
+
+```go
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log"
+    "github.com/cencori/cencori-go"
+)
+
+func streamWithErrorHandling() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    ctx := context.Background()
+    
+    stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello"},
+        },
+    })
+    
+    if err != nil {
+        // Handle initialization errors
+        if errors.Is(err, cencori.ErrInvalidAPIKey) {
+            log.Fatal("Invalid API key")
+        } else if errors.Is(err, cencori.ErrRateLimited) {
+            log.Fatal("Rate limited")
+        } else {
+            log.Fatal(err)
+        }
+    }
+    
+    for chunk := range stream {
+        // Check for errors in chunk
+        if chunk.Error != nil {
+            fmt.Printf("Stream error: %v\n", chunk.Error)
+            break
+        }
+        
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+}
+```
+
+## Collecting Stream Metadata
+
+Track tokens and cost during streaming:
+
+```go
+func streamWithMetadata() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    stream, err := client.Chat.Stream(context.Background(), &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Explain quantum computing"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    var fullContent string
+    var model, provider string
+    var finishReason string
+    
+    for chunk := range stream {
+        if chunk.Model != "" {
+            model = chunk.Model
+        }
+        if chunk.Provider != "" {
+            provider = chunk.Provider
+        }
+        
+        if len(chunk.Choices) > 0 {
+            delta := chunk.Choices[0].Delta.Content
+            fullContent += delta
+            fmt.Print(delta)
+            
+            if chunk.Choices[0].FinishReason != nil {
+                finishReason = *chunk.Choices[0].FinishReason
+            }
+        }
+        
+        // Last chunk may contain usage info
+        if chunk.Usage != nil {
+            fmt.Printf("\n\nTokens used: %d\n", chunk.Usage.TotalTokens)
+            fmt.Printf("Cost: $%.6f\n", chunk.CostUSD)
+        }
+    }
+    
+    fmt.Printf("\nModel: %s\n", model)
+    fmt.Printf("Provider: %s\n", provider)
+    fmt.Printf("Finish reason: %s\n", finishReason)
+    fmt.Printf("Characters: %d\n", len(fullContent))
+}
+```
+
+## Streaming Multi-Turn Conversations
+
+```go
+func streamConversation() {
+    client, _ := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    
+    messages := []cencori.Message{
+        {Role: "system", Content: "You are a helpful assistant."},
+    }
+    
+    // First turn
+    messages = append(messages, cencori.Message{
+        Role:    "user",
+        Content: "What is Go?",
+    })
+    
+    stream, _ := client.Chat.Stream(context.Background(), &cencori.ChatParams{
+        Model:    "gpt-4o",
+        Messages: messages,
+    })
+    
+    var assistantResponse string
+    fmt.Print("Assistant: ")
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            delta := chunk.Choices[0].Delta.Content
+            assistantResponse += delta
+            fmt.Print(delta)
+        }
+    }
+    fmt.Println()
+    
+    // Add to history
+    messages = append(messages, cencori.Message{
+        Role:    "assistant",
+        Content: assistantResponse,
+    })
+    
+    // Second turn
+    messages = append(messages, cencori.Message{
+        Role:    "user",
+        Content: "What are its main features?",
+    })
+    
+    stream, _ = client.Chat.Stream(context.Background(), &cencori.ChatParams{
+        Model:    "gpt-4o",
+        Messages: messages,
+    })
+    
+    fmt.Print("Assistant: ")
+    for chunk := range stream {
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+    fmt.Println()
+}
+```
+
+## Streaming Across Different Providers
+
+Streaming works with all supported providers:
+
+```go
+// OpenAI GPT-4o
+stream, _ := client.Chat.Stream(ctx, &cencori.ChatParams{
+    Model:    "gpt-4o",
+    Messages: messages,
+})
+
+// Anthropic Claude
+stream, _ = client.Chat.Stream(ctx, &cencori.ChatParams{
+    Model:    "claude-3-opus",
+    Messages: messages,
+})
+
+// Google Gemini
+stream, _ = client.Chat.Stream(ctx, &cencori.ChatParams{
+    Model:    "gemini-2.5-flash",
+    Messages: messages,
+})
+```
+
+Cencori handles provider-specific streaming protocols automatically.
+
+## Best Practices
+
+### 1. Always Use Context
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+stream, err := client.Chat.Stream(ctx, params)
+```
+
+### 2. Handle Partial Content
+
+```go
+var fullContent strings.Builder
+
+for chunk := range stream {
+    if len(chunk.Choices) > 0 {
+        delta := chunk.Choices[0].Delta.Content
+        fullContent.WriteString(delta)
+        fmt.Print(delta)
+    }
+}
+```
+
+### 3. Check Finish Reason
+
+```go
+for chunk := range stream {
+    if len(chunk.Choices) > 0 {
+        if chunk.Choices[0].FinishReason != nil {
+            reason := *chunk.Choices[0].FinishReason
+            if reason == "length" {
+                fmt.Println("\n[Response truncated due to length]")
+            } else if reason == "content_filter" {
+                fmt.Println("\n[Response blocked by content filter]")
+            }
+        }
+    }
+}
+```
+
+### 4. Buffer for Better Performance
+
+```go
+import "bufio"
+
+writer := bufio.NewWriter(os.Stdout)
+defer writer.Flush()
+
+for chunk := range stream {
+    if len(chunk.Choices) > 0 {
+        writer.WriteString(chunk.Choices[0].Delta.Content)
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/go/chat">
+    Learn about chat parameters
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/go/memory">
+    Add context with RAG
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/go/error-handling">
+    Handle errors properly
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/sdks/go/quickstart">
+    Back to quickstart
+  </Card>
+</CardGroup>

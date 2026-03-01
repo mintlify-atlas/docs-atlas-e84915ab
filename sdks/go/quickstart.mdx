@@ -1,0 +1,215 @@
+---
+title: 'Go SDK Quickstart'
+description: 'Get started with the Cencori Go SDK in minutes'
+---
+
+## Installation
+
+Install the Cencori Go SDK using `go get`:
+
+```bash
+go get github.com/cencori/cencori-go
+```
+
+## Get Your API Key
+
+1. Sign up at [cencori.com](https://cencori.com)
+2. Create a project in your dashboard
+3. Generate an API key (starts with `csk_`)
+
+## Quick Start Example
+
+Here's a complete example to make your first request:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    "github.com/cencori/cencori-go"
+)
+
+func main() {
+    // Initialize the client with your API key
+    client, err := cencori.NewClient(
+        cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+    )
+    if err != nil {
+        panic(err)
+    }
+    
+    // Create a chat completion
+    resp, err := client.Chat.Create(context.Background(), &cencori.ChatParams{
+        Model: "gpt-4o",
+        Messages: []cencori.Message{
+            {Role: "user", Content: "Hello!"},
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+## Setting Your API Key
+
+### Environment Variable (Recommended)
+
+Set the `CENCORI_API_KEY` environment variable:
+
+```bash
+export CENCORI_API_KEY="csk_your_secret_key"
+```
+
+Then use it in your code:
+
+```go
+client, err := cencori.NewClient(
+    cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+)
+```
+
+### Direct Initialization
+
+Alternatively, pass the key directly (not recommended for production):
+
+```go
+client, err := cencori.NewClient(
+    cencori.WithAPIKey("csk_your_secret_key"),
+)
+```
+
+## Context Usage
+
+All SDK methods require a `context.Context` as the first parameter. This allows for:
+
+- Request cancellation
+- Timeout control
+- Passing request-scoped values
+
+### Basic Context
+
+```go
+ctx := context.Background()
+resp, err := client.Chat.Create(ctx, params)
+```
+
+### Context with Timeout
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+resp, err := client.Chat.Create(ctx, params)
+```
+
+### Context with Cancellation
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+// Cancel on signal
+go func() {
+    <-sigChan
+    cancel()
+}()
+
+resp, err := client.Chat.Create(ctx, params)
+```
+
+## Multi-Provider Support
+
+Switch between AI providers by changing the model parameter:
+
+```go
+// OpenAI GPT-4o
+resp, _ := client.Chat.Create(ctx, &cencori.ChatParams{
+    Model: "gpt-4o",
+    Messages: []cencori.Message{
+        {Role: "user", Content: "Hello!"},
+    },
+})
+
+// Anthropic Claude
+resp, _ = client.Chat.Create(ctx, &cencori.ChatParams{
+    Model: "claude-3-opus",
+    Messages: []cencori.Message{
+        {Role: "user", Content: "Hello!"},
+    },
+})
+
+// Google Gemini
+resp, _ = client.Chat.Create(ctx, &cencori.ChatParams{
+    Model: "gemini-2.5-flash",
+    Messages: []cencori.Message{
+        {Role: "user", Content: "Hello!"},
+    },
+})
+```
+
+## Response Structure
+
+The chat response contains:
+
+```go
+type ChatResponse struct {
+    Choices []struct {
+        Message struct {
+            Role    string
+            Content string
+        }
+        FinishReason string
+    }
+    Model    string
+    Provider string
+    Usage    struct {
+        PromptTokens     int
+        CompletionTokens int
+        TotalTokens      int
+    }
+    CostUSD float64
+}
+```
+
+Access response data:
+
+```go
+resp, err := client.Chat.Create(ctx, params)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Get the message content
+content := resp.Choices[0].Message.Content
+
+// Check token usage
+tokens := resp.Usage.TotalTokens
+
+// Check cost
+cost := resp.CostUSD
+
+fmt.Printf("Response: %s\n", content)
+fmt.Printf("Tokens: %d, Cost: $%.6f\n", tokens, cost)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/sdks/go/chat">
+    Learn about advanced chat features
+  </Card>
+  <Card title="Streaming" icon="stream" href="/sdks/go/streaming">
+    Stream responses in real-time
+  </Card>
+  <Card title="Memory/RAG" icon="database" href="/sdks/go/memory">
+    Add context and memory to your AI
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/sdks/go/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

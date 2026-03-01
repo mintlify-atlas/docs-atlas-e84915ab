@@ -1,0 +1,387 @@
+---
+title: 'Memory Store'
+description: 'Store and manage vector memories for semantic search and RAG'
+---
+
+## Overview
+
+The Memory Store API allows you to store text content with vector embeddings for semantic search and retrieval-augmented generation (RAG).
+
+## Authentication
+
+All memory endpoints require dashboard authentication (user session), not API key authentication.
+
+## Endpoints
+
+### Store Memory
+
+```
+POST /api/projects/{projectId}/memory/memories/store
+```
+
+Store a new memory with automatic embedding generation.
+
+#### Request Body
+
+<ParamField body="namespace_id" type="string" required>
+  ID of the namespace to store the memory in
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Text content to store and embed
+  
+  Maximum: 8000 characters recommended
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Custom metadata to attach to the memory
+  
+  Examples:
+  - `{"source": "docs", "url": "https://..."}`
+  - `{"category": "faq", "lastUpdated": "2024-03-01"}`
+</ParamField>
+
+#### Response
+
+<ResponseField name="memory" type="object">
+  Created memory object
+  
+  <Expandable title="Memory">
+    <ResponseField name="id" type="string">
+      Unique memory identifier
+    </ResponseField>
+    <ResponseField name="content" type="string">
+      Stored content
+    </ResponseField>
+    <ResponseField name="metadata" type="object">
+      Custom metadata
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      ISO 8601 timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```bash
+curl https://api.cencori.com/api/projects/proj_123/memory/memories/store \
+  -H "Cookie: session=..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace_id": "ns_abc123",
+    "content": "Our product supports real-time collaboration with up to 100 users.",
+    "metadata": {
+      "source": "product-features",
+      "section": "collaboration",
+      "url": "https://docs.example.com/features/collab"
+    }
+  }'
+```
+
+```json
+{
+  "memory": {
+    "id": "mem_xyz789",
+    "content": "Our product supports real-time collaboration with up to 100 users.",
+    "metadata": {
+      "source": "product-features",
+      "section": "collaboration",
+      "url": "https://docs.example.com/features/collab"
+    },
+    "created_at": "2024-03-01T12:00:00Z"
+  }
+}
+```
+
+### Create Namespace
+
+```
+POST /api/projects/{projectId}/memory/namespaces
+```
+
+Create a new memory namespace.
+
+#### Request Body
+
+<ParamField body="name" type="string" required>
+  Namespace name (unique per project)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description
+</ParamField>
+
+#### Example
+
+```bash
+curl https://api.cencori.com/api/projects/proj_123/memory/namespaces \
+  -H "Cookie: session=..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "product-docs",
+    "description": "Product documentation and features"
+  }'
+```
+
+### List Namespaces
+
+```
+GET /api/projects/{projectId}/memory/namespaces
+```
+
+List all namespaces in a project.
+
+```bash
+curl https://api.cencori.com/api/projects/proj_123/memory/namespaces \
+  -H "Cookie: session=..."
+```
+
+### Delete Namespace
+
+```
+DELETE /api/projects/{projectId}/memory/namespaces/{namespaceId}
+```
+
+Delete a namespace and all its memories.
+
+```bash
+curl -X DELETE \
+  https://api.cencori.com/api/projects/proj_123/memory/namespaces/ns_abc123 \
+  -H "Cookie: session=..."
+```
+
+## Use Cases
+
+### Index Documentation
+
+```typescript
+import fs from 'fs';
+import path from 'path';
+
+const projectId = 'proj_123';
+const namespaceId = 'ns_docs';
+
+// Read all markdown files
+const docsDir = './docs';
+const files = fs.readdirSync(docsDir);
+
+for (const file of files) {
+  const content = fs.readFileSync(path.join(docsDir, file), 'utf-8');
+  
+  // Store in memory
+  await fetch(
+    `https://api.cencori.com/api/projects/${projectId}/memory/memories/store`,
+    {
+      method: 'POST',
+      headers: {
+        'Cookie': `session=${sessionToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        namespace_id: namespaceId,
+        content: content,
+        metadata: {
+          filename: file,
+          path: path.join(docsDir, file),
+          indexed_at: new Date().toISOString()
+        }
+      })
+    }
+  );
+}
+```
+
+### Store Customer Support Articles
+
+```typescript
+const articles = [
+  {
+    title: 'How to reset password',
+    content: 'To reset your password, go to...',
+    category: 'account'
+  },
+  {
+    title: 'Billing FAQ',
+    content: 'Billing is processed monthly...',
+    category: 'billing'
+  }
+];
+
+for (const article of articles) {
+  await fetch(`/api/projects/${projectId}/memory/memories/store`, {
+    method: 'POST',
+    body: JSON.stringify({
+      namespace_id: 'ns_support',
+      content: `${article.title}\n\n${article.content}`,
+      metadata: {
+        title: article.title,
+        category: article.category,
+        type: 'faq'
+      }
+    })
+  });
+}
+```
+
+### Import from API
+
+```typescript
+// Fetch data from external API
+const response = await fetch('https://api.example.com/knowledge-base');
+const data = await response.json();
+
+// Store each item
+for (const item of data.items) {
+  await fetch(
+    `https://api.cencori.com/api/projects/${projectId}/memory/memories/store`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        namespace_id: namespaceId,
+        content: item.text,
+        metadata: {
+          external_id: item.id,
+          source: 'external-api',
+          last_synced: new Date().toISOString()
+        }
+      })
+    }
+  );
+}
+```
+
+### Chunk Long Documents
+
+```typescript
+// Split long text into chunks
+function chunkText(text: string, maxChars: number = 2000): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const chunks: string[] = [];
+  let current = '';
+  
+  for (const sentence of sentences) {
+    if ((current + sentence).length > maxChars && current) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
+const longDoc = fs.readFileSync('long-document.txt', 'utf-8');
+const chunks = chunkText(longDoc, 2000);
+
+for (let i = 0; i < chunks.length; i++) {
+  await fetch(
+    `https://api.cencori.com/api/projects/${projectId}/memory/memories/store`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        namespace_id: namespaceId,
+        content: chunks[i],
+        metadata: {
+          doc_id: 'long-doc',
+          chunk: i + 1,
+          total_chunks: chunks.length
+        }
+      })
+    }
+  );
+}
+```
+
+## Embedding Generation
+
+Memories are automatically embedded using:
+
+- **Model:** `text-embedding-3-small` (OpenAI)
+- **Dimensions:** 1536
+- **Cost:** $0.02 per 1M tokens
+
+Embeddings are generated server-side when you store a memory. No need to generate embeddings yourself.
+
+## Best Practices
+
+1. **Chunk appropriately**
+   - Keep memories focused (1-2 paragraphs)
+   - Split long documents into chunks
+   - Each chunk should be self-contained
+
+2. **Add rich metadata**
+   - Include source URLs
+   - Add categories/tags
+   - Store timestamps
+   - Enable filtering later
+
+3. **Organize namespaces**
+   - Separate by domain/topic
+   - One namespace per use case
+   - Easier to maintain
+
+4. **Update regularly**
+   - Remove outdated memories
+   - Re-index changed content
+   - Keep information current
+
+5. **Handle errors**
+   - Implement retry logic
+   - Log failures
+   - Track indexing progress
+
+## Limitations
+
+- Maximum content length: ~8000 characters recommended
+- Longer content should be chunked
+- Embeddings are not editable (delete and re-create)
+- Namespace names must be unique per project
+
+## Error Responses
+
+### Missing Content
+
+```json
+{
+  "error": "Content is required"
+}
+```
+
+HTTP Status: `400`
+
+### Namespace Not Found
+
+```json
+{
+  "error": "Namespace not found"
+}
+```
+
+HTTP Status: `404`
+
+### Insufficient Credits
+
+```json
+{
+  "error": "INSUFFICIENT_CREDITS",
+  "message": "Unable to charge credits for this request."
+}
+```
+
+HTTP Status: `402`
+
+## Pricing
+
+Memory storage costs:
+
+- **Embedding generation:** $0.02 per 1M tokens (OpenAI)
+- **Storage:** Included in subscription
+- **Searches:** Charged per RAG/search request
+
+Example:
+- Store 1000 memories (200 words each): ~$0.40
+- Storage: Free
+- Searches: $0.0000xx per query

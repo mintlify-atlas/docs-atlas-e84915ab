@@ -1,0 +1,418 @@
+---
+title: GitHub integration
+description: Automatically scan your GitHub repositories for security issues on every push
+---
+
+# GitHub integration
+
+Integrate Cencori Scan with GitHub to automatically scan your repositories for security issues, secrets, and vulnerabilities on every push or pull request.
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Automatic scanning" icon="rotate">
+    Scan repositories on every push, pull request, or schedule
+  </Card>
+  <Card title="Status checks" icon="circle-check">
+    Add security checks to your pull request workflow
+  </Card>
+  <Card title="Issue comments" icon="comment">
+    Post scan results as PR comments with fix suggestions
+  </Card>
+  <Card title="Security alerts" icon="bell">
+    Get notified when critical issues are detected
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Steps>
+  <Step title="Install the GitHub App">
+    Visit [github.com/apps/cencori-scan](https://github.com/apps/cencori-scan) and click **Install**
+  </Step>
+  <Step title="Choose repositories">
+    Select which repositories to scan (all or specific ones)
+  </Step>
+  <Step title="Authorize permissions">
+    Grant read access to repository contents and write access for status checks
+  </Step>
+  <Step title="Configure settings">
+    Set your scanning preferences in the Cencori dashboard
+  </Step>
+</Steps>
+
+## Configuration
+
+### Repository settings
+
+Configure scanning behavior for each repository:
+
+```yaml
+# .cencori/config.yml
+scan:
+  # Trigger automatic scans on these events
+  triggers:
+    - push
+    - pull_request
+  
+  # Branches to scan (supports glob patterns)
+  branches:
+    - main
+    - master
+    - develop
+  
+  # Fail builds on these severity levels
+  fail_on:
+    - critical
+    - high
+  
+  # Exclude paths from scanning
+  exclude:
+    - node_modules/**
+    - dist/**
+    - build/**
+  
+  # Auto-fix settings
+  auto_fix:
+    enabled: true
+    create_pull_request: true
+```
+
+Place this file in your repository at `.cencori/config.yml`.
+
+### GitHub Actions workflow
+
+Add Cencori Scan to your GitHub Actions:
+
+```yaml
+# .github/workflows/security-scan.yml
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Cencori Scan
+        uses: cencori/scan-action@v1
+        with:
+          api-key: ${{ secrets.CENCORI_API_KEY }}
+          fail-on: critical,high
+          
+      - name: Upload scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-results
+          path: scan-results.json
+```
+
+### Required secrets
+
+Add your Cencori API key to GitHub Secrets:
+
+1. Go to your repository → **Settings** → **Secrets and variables** → **Actions**
+2. Click **New repository secret**
+3. Name: `CENCORI_API_KEY`
+4. Value: Your Cencori API key (get one at [cencori.com/dashboard](https://cencori.com/dashboard))
+5. Click **Add secret**
+
+## Pull request checks
+
+### Status checks
+
+Cencori Scan adds a status check to every pull request:
+
+- ✓ **Pass** - No critical or high-severity issues
+- ✗ **Fail** - Critical or high-severity issues detected
+- ⚠️ **Warning** - Medium or low-severity issues detected
+
+Configure which severity levels fail the build in `.cencori/config.yml`.
+
+### PR comments
+
+Scan results are posted as PR comments:
+
+```markdown
+## 🔍 Cencori Security Scan
+
+**Score: D-Tier** - Significant security issues found
+
+### Issues found (5)
+
+#### 🔴 Critical (2)
+- **Hardcoded API Key** in `src/config.ts:12`
+  - Pattern: `sk-proj-****`
+  - Fix: Move to environment variables
+
+- **SQL Injection** in `src/db.ts:45`
+  - Pattern: String concatenation in query
+  - Fix: Use parameterized queries
+
+#### 🟠 High (3)
+- **PII Exposure** in `src/user.ts:28`
+- **XSS Vulnerability** in `src/render.tsx:15`
+- **Insecure CORS** in `src/middleware.ts:8`
+
+[View full report →](https://scan.cencori.com/scans/scan_abc123)
+```
+
+### Auto-fix pull requests
+
+When auto-fix is enabled, Cencori automatically creates pull requests with fixes:
+
+```yaml
+# .cencori/config.yml
+auto_fix:
+  enabled: true
+  create_pull_request: true
+  pr_settings:
+    title: "🔒 [Cencori] Security fixes"
+    branch_prefix: "cencori/autofix"
+    reviewers:
+      - security-team
+    labels:
+      - security
+      - auto-fix
+```
+
+Example auto-fix PR:
+
+```markdown
+## 🔒 Security fixes by Cencori
+
+This PR fixes 3 security issues detected by Cencori Scan:
+
+### Fixed issues
+
+1. **Hardcoded API key in src/config.ts**
+   - Moved `OPENAI_API_KEY` to environment variables
+   
+2. **SQL injection in src/db.ts**
+   - Replaced string concatenation with parameterized query
+   
+3. **XSS vulnerability in src/render.tsx**
+   - Added HTML sanitization before rendering
+
+[View scan report →](https://scan.cencori.com/scans/scan_abc123)
+```
+
+## Branch protection
+
+Add Cencori Scan to your branch protection rules:
+
+1. Go to **Settings** → **Branches** → **Branch protection rules**
+2. Select your main branch (e.g., `main`)
+3. Enable **Require status checks to pass before merging**
+4. Search for and select **cencori-scan**
+5. Save changes
+
+Now pull requests cannot be merged if the security scan fails.
+
+## Notifications
+
+### GitHub notifications
+
+Receive GitHub notifications when:
+- A scan completes on a pull request
+- Critical issues are detected
+- Auto-fix pull requests are created
+
+Configure in **Settings** → **Notifications** → **Participating**
+
+### Email alerts
+
+Get email alerts for security issues:
+
+1. Go to [scan.cencori.com](https://scan.cencori.com)
+2. Navigate to **Settings** → **Notifications**
+3. Enable **Email on Critical Issues**
+4. Set notification frequency
+
+### Slack integration
+
+Post scan results to Slack:
+
+```yaml
+# .cencori/config.yml
+notifications:
+  slack:
+    enabled: true
+    webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+    channel: "#security"
+    notify_on:
+      - critical
+      - high
+```
+
+Add `SLACK_WEBHOOK` to your GitHub Secrets.
+
+## Scanning private repositories
+
+Cencori Scan supports private repositories with proper authentication:
+
+### GitHub App installation
+
+When you install the Cencori Scan GitHub App, it automatically gets access to scan private repositories you've authorized.
+
+### GitHub Actions for private repos
+
+Use a GitHub token with repo access:
+
+```yaml
+- name: Checkout private repo
+  uses: actions/checkout@v4
+  with:
+    token: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Run Cencori Scan
+  uses: cencori/scan-action@v1
+  with:
+    api-key: ${{ secrets.CENCORI_API_KEY }}
+```
+
+The default `GITHUB_TOKEN` has access to the current repository.
+
+## Monorepo support
+
+Scan specific packages in a monorepo:
+
+```yaml
+# .cencori/config.yml
+scan:
+  # Scan multiple sub-projects
+  projects:
+    - name: frontend
+      path: packages/frontend
+      fail_on: [critical, high]
+      
+    - name: backend
+      path: packages/backend
+      fail_on: [critical]
+      
+    - name: shared
+      path: packages/shared
+      fail_on: [critical]
+```
+
+Each project gets its own security score and report.
+
+## Advanced workflows
+
+### Scheduled scans
+
+Run security scans on a schedule:
+
+```yaml
+# .github/workflows/security-scan-scheduled.yml
+name: Scheduled Security Scan
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cencori/scan-action@v1
+        with:
+          api-key: ${{ secrets.CENCORI_API_KEY }}
+```
+
+### Differential scanning
+
+Only scan changed files in pull requests:
+
+```yaml
+- name: Run Cencori Scan (changed files only)
+  uses: cencori/scan-action@v1
+  with:
+    api-key: ${{ secrets.CENCORI_API_KEY }}
+    scan-mode: diff
+    base-ref: ${{ github.base_ref }}
+```
+
+### Matrix builds
+
+Scan multiple configurations:
+
+```yaml
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cencori/scan-action@v1
+        with:
+          api-key: ${{ secrets.CENCORI_API_KEY }}
+          environment: ${{ matrix.environment }}
+```
+
+## Troubleshooting
+
+### Scan fails with "Authentication failed"
+
+**Solution**: Check that your `CENCORI_API_KEY` is correctly set in GitHub Secrets and has not expired.
+
+### Status check not appearing
+
+**Solution**: Ensure the Cencori Scan GitHub App is installed and has access to the repository.
+
+### Auto-fix PRs not created
+
+**Solution**: The GitHub App needs write access to create pull requests. Reinstall the app with the correct permissions.
+
+### Scans timing out
+
+**Solution**: For large repositories, increase the timeout or exclude certain directories in `.cencori/config.yml`:
+
+```yaml
+scan:
+  timeout: 600  # 10 minutes
+  exclude:
+    - node_modules/**
+    - vendor/**
+```
+
+## Permissions required
+
+The Cencori Scan GitHub App requires these permissions:
+
+| Permission | Access | Reason |
+|------------|--------|--------|
+| **Contents** | Read | Scan repository files |
+| **Pull requests** | Write | Post comments and create auto-fix PRs |
+| **Checks** | Write | Add status checks |
+| **Metadata** | Read | Access repository information |
+
+You can revoke access anytime from GitHub Settings → Applications.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Web scanner" icon="browser" href="/scan/web-scanner">
+    View scan history in the web dashboard
+  </Card>
+  <Card title="CI/CD integration" icon="gears" href="/scan/ci-cd-integration">
+    Integrate with other CI/CD platforms
+  </Card>
+  <Card title="Security scoring" icon="star" href="/scan/security-scoring">
+    Understand how scores are calculated
+  </Card>
+  <Card title="CLI usage" icon="terminal" href="/scan/cli-usage">
+    Use the CLI for local development
+  </Card>
+</CardGroup>

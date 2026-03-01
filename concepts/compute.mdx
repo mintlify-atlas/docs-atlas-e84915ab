@@ -1,0 +1,240 @@
+---
+title: Compute
+description: Serverless execution for AI agents and logic with secure sandboxing and auto-scaling
+---
+
+<Note>
+  **Status**: Coming soon
+  
+  The Compute primitive is currently in development. This page describes the planned architecture and capabilities.
+</Note>
+
+Cencori Compute provides serverless execution for AI agents and custom logic. Run untrusted code securely, execute lightweight models at the edge, and scale from prototype to millions of requests automatically.
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Secure sandbox" icon="box">
+    Execute untrusted code in isolated environments with resource limits
+  </Card>
+  <Card title="Edge inference" icon="globe">
+    Run lightweight models closer to users for lower latency
+  </Card>
+  <Card title="Auto-scaling" icon="chart-line">
+    Scale from prototype to production without configuration
+  </Card>
+  <Card title="Multi-runtime" icon="layer-group">
+    Support for Python, Node.js, and containerized workloads
+  </Card>
+</CardGroup>
+
+## Use cases
+
+### AI agents
+
+Run autonomous agents that combine LLM calls with custom logic:
+
+```python
+# Coming soon
+from cencori import Cencori
+
+cencori = Cencori(api_key='your-api-key')
+
+result = await cencori.compute.run(
+  runtime='python',
+  code="""
+import requests
+from cencori import ai
+
+# Fetch data from API
+data = requests.get('https://api.example.com/data').json()
+
+# Analyze with AI
+response = ai.chat(
+  model='gpt-4o',
+  messages=[{
+    'role': 'user',
+    'content': f'Summarize this data: {data}'
+  }]
+)
+
+return response.content
+  """
+)
+
+print(result.output)
+```
+
+### Tool execution
+
+Execute tools returned by AI models securely:
+
+```typescript
+// Coming soon
+const response = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'What is the weather in SF?' }],
+  tools: [{
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Get current weather for a location',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' }
+        }
+      }
+    }
+  }]
+});
+
+if (response.toolCalls) {
+  for (const toolCall of response.toolCalls) {
+    const result = await cencori.compute.executeTool({
+      name: toolCall.function.name,
+      arguments: JSON.parse(toolCall.function.arguments)
+    });
+  }
+}
+```
+
+### Edge inference
+
+Run lightweight models at the edge for low-latency applications:
+
+```typescript
+// Coming soon
+const result = await cencori.compute.infer({
+  model: 'llama-3.2-3b',
+  region: 'auto', // Automatically route to nearest edge location
+  prompt: 'Classify this text as positive or negative: I love this product!'
+});
+```
+
+## Security
+
+### Sandboxed execution
+
+All code runs in isolated containers with:
+
+- **Resource limits**: CPU, memory, and execution time caps
+- **Network isolation**: Controlled outbound access
+- **File system isolation**: Read-only file system by default
+- **Secrets injection**: Secure access to environment variables
+
+### Runtime policies
+
+Define policies to control what your code can do:
+
+```typescript
+// Coming soon
+const result = await cencori.compute.run({
+  runtime: 'python',
+  code: myCode,
+  policy: {
+    allowedDomains: ['api.example.com'],
+    maxMemoryMB: 512,
+    maxDurationSec: 30,
+    allowNetworkAccess: true,
+    allowFileWrites: false
+  }
+});
+```
+
+## Performance
+
+### Cold start optimization
+
+Compute instances are pre-warmed to minimize cold start latency:
+
+- **< 100ms** for Node.js functions
+- **< 500ms** for Python functions
+- **< 2s** for container workloads
+
+### Auto-scaling
+
+Automatic scaling based on request volume:
+
+```
+┌──────────────────────────────────────────────────┐
+│  Request Volume        │  Instances             │
+├──────────────────────────────────────────────────┤
+│  0-100 req/s           │  1-5                   │
+│  100-1000 req/s        │  5-50                  │
+│  1000-10000 req/s      │  50-500                │
+│  10000+ req/s          │  500+ (contact sales)  │
+└──────────────────────────────────────────────────┘
+```
+
+## Observability
+
+### Execution logs
+
+All executions are logged with:
+
+- Input/output snapshots
+- Resource usage (CPU, memory)
+- Execution duration
+- Error traces
+
+```typescript
+// Coming soon
+const logs = await cencori.compute.logs({
+  executionId: 'exec_abc123',
+  includeStdout: true,
+  includeStderr: true
+});
+```
+
+### Metrics
+
+Track compute usage across your project:
+
+- Total executions
+- Success/error rates
+- Average duration
+- Resource consumption
+
+## Pricing
+
+Compute pricing is based on execution time and resources:
+
+| Resource | Price |
+|----------|-------|
+| CPU-second | $0.0001 |
+| GB-second | $0.00001 |
+| Storage (GB/month) | $0.10 |
+
+<Info>
+  Free tier includes 100,000 CPU-seconds and 10GB storage per month.
+</Info>
+
+## Entry point
+
+```
+POST /api/compute/run
+```
+
+**Status**: Planned
+
+## Comparison with alternatives
+
+| Feature | Cencori Compute | AWS Lambda | Modal | E2B |
+|---------|-----------------|------------|-------|-----|
+| AI-native | ✅ | ❌ | ✅ | ✅ |
+| Sub-second cold start | ✅ | ❌ | ✅ | ✅ |
+| Sandboxed execution | ✅ | ⚠️ | ✅ | ✅ |
+| Built-in AI gateway | ✅ | ❌ | ❌ | ❌ |
+| Edge deployment | ✅ | ⚠️ | ❌ | ❌ |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Join waitlist" icon="envelope" href="https://cencori.com/compute">
+    Get early access to Cencori Compute
+  </Card>
+  <Card title="Workflow orchestration" icon="diagram-project" href="/concepts/workflow">
+    Learn about multi-step AI pipelines
+  </Card>
+</CardGroup>
