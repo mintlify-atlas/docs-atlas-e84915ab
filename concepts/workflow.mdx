@@ -3,12 +3,6 @@ title: Workflow
 description: Visual orchestration for complex AI pipelines with state management and human-in-the-loop
 ---
 
-<Note>
-  **Status**: Coming soon
-  
-  The Workflow primitive is currently in development. This page describes the planned architecture and capabilities.
-</Note>
-
 Cencori Workflow provides visual orchestration for complex AI pipelines. Chain AI calls, logic steps, and human approvals into reliable, multi-step processes with built-in state management and error recovery.
 
 ## Core capabilities
@@ -35,7 +29,7 @@ Cencori Workflow provides visual orchestration for complex AI pipelines. Chain A
 Automate multi-step document analysis:
 
 ```typescript
-// Coming soon
+
 const workflow = await cencori.workflow.create({
   name: 'document-analysis',
   steps: [
@@ -82,7 +76,7 @@ const run = await cencori.workflow.trigger('document-analysis', {
 Route and respond to customer inquiries:
 
 ```typescript
-// Coming soon
+
 const workflow = await cencori.workflow.create({
   name: 'support-triage',
   trigger: {
@@ -126,7 +120,7 @@ const workflow = await cencori.workflow.create({
 Multi-layer content review with escalation:
 
 ```typescript
-// Coming soon
+
 const workflow = await cencori.workflow.create({
   name: 'content-moderation',
   steps: [
@@ -417,8 +411,6 @@ console.log(run.steps);
 ```
 POST /api/workflow/execute
 ```
-
-**Status**: Planned
 
 ## SDK reference
 

@@ -3,12 +3,6 @@ title: Compute
 description: Serverless execution for AI agents and logic with secure sandboxing and auto-scaling
 ---
 
-<Note>
-  **Status**: Coming soon
-  
-  The Compute primitive is currently in development. This page describes the planned architecture and capabilities.
-</Note>
-
 Cencori Compute provides serverless execution for AI agents and custom logic. Run untrusted code securely, execute lightweight models at the edge, and scale from prototype to millions of requests automatically.
 
 ## Core capabilities
@@ -35,7 +29,6 @@ Cencori Compute provides serverless execution for AI agents and custom logic. Ru
 Run autonomous agents that combine LLM calls with custom logic:
 
 ```python
-# Coming soon
 from cencori import Cencori
 
 cencori = Cencori(api_key='your-api-key')
@@ -70,7 +63,6 @@ print(result.output)
 Execute tools returned by AI models securely:
 
 ```typescript
-// Coming soon
 const response = await cencori.ai.chat({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: 'What is the weather in SF?' }],
@@ -215,8 +207,6 @@ Compute pricing is based on execution time and resources:
 ```
 POST /api/compute/run
 ```
-
-**Status**: Planned
 
 ## Comparison with alternatives
 

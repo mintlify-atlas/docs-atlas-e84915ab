@@ -1,80 +1,319 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get up and running with Cencori in 5 minutes
 ---
 
-## Get started in three steps
+Get started with Cencori and make your first AI request in minutes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- A Cencori account (sign up at [cencori.com](https://cencori.com))
+- Node.js 18+, Python 3.8+, or Go 1.19+ installed
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Steps
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Install the SDK">
+    Choose your preferred language and install the Cencori SDK:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <CodeGroup>
+    ```bash npm
+    npm install cencori
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash yarn
+    yarn add cencori
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash pnpm
+    pnpm add cencori
+    ```
 
-### Step 3: Go live
+    ```bash pip
+    pip install cencori
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash go
+    go get github.com/cencori/cencori-go
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Get your API key">
+    1. Sign in to your [Cencori dashboard](https://cencori.com/dashboard)
+    2. Create a new project
+    3. Navigate to **API Keys**
+    4. Click **Create API Key**
+    5. Copy your secret key (starts with `csk_`)
+
+    <Warning>
+      Store your API key securely. Never commit it to version control.
+    </Warning>
+  </Step>
+
+  <Step title="Set up your environment">
+    Add your API key to your environment variables:
+
+    ```bash
+    export CENCORI_API_KEY=csk_your_secret_key
+    ```
+
+    Or create a `.env` file:
+
+    ```bash
+    CENCORI_API_KEY=csk_your_secret_key
+    ```
+  </Step>
+
+  <Step title="Make your first request">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        import { Cencori } from 'cencori';
+
+        const cencori = new Cencori({
+          apiKey: process.env.CENCORI_API_KEY
+        });
+
+        const response = await cencori.ai.chat({
+          messages: [{ role: 'user', content: 'Hello!' }],
+          model: 'gpt-4o'
+        });
+
+        console.log(response.content);
+        // Output: Hello! How can I help you today?
+        ```
+      </Tab>
+
+      <Tab title="Python">
+        ```python
+        from cencori import Cencori
+        import os
+
+        cencori = Cencori(api_key=os.getenv("CENCORI_API_KEY"))
+
+        response = cencori.ai.chat(
+            messages=[{"role": "user", "content": "Hello!"}],
+            model="gpt-4o"
+        )
+
+        print(response.content)
+        # Output: Hello! How can I help you today?
+        ```
+      </Tab>
+
+      <Tab title="Go">
+        ```go
+        package main
+
+        import (
+            "context"
+            "fmt"
+            "os"
+            "github.com/cencori/cencori-go"
+        )
+
+        func main() {
+            client, err := cencori.NewClient(
+                cencori.WithAPIKey(os.Getenv("CENCORI_API_KEY")),
+            )
+            if err != nil {
+                panic(err)
+            }
+
+            resp, err := client.Chat.Create(context.Background(), &cencori.ChatParams{
+                Model: "gpt-4o",
+                Messages: []cencori.Message{
+                    {Role: "user", Content: "Hello!"},
+                },
+            })
+            if err != nil {
+                panic(err)
+            }
+
+            fmt.Println(resp.Choices[0].Message.Content)
+            // Output: Hello! How can I help you today?
+        }
+        ```
+      </Tab>
+
+      <Tab title="cURL">
+        ```bash
+        curl https://api.cencori.com/v1/ai/chat \
+          -H "CENCORI_API_KEY: $CENCORI_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello!"}]
+          }'
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Try streaming">
+    Get real-time responses with streaming:
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        const stream = cencori.ai.chatStream({
+          messages: [{ role: 'user', content: 'Tell me a story' }],
+          model: 'gpt-4o'
+        });
+
+        for await (const chunk of stream) {
+          process.stdout.write(chunk.delta);
+        }
+        ```
+      </Tab>
+
+      <Tab title="Python">
+        ```python
+        for chunk in cencori.ai.chat_stream(
+            messages=[{"role": "user", "content": "Tell me a story"}],
+            model="gpt-4o"
+        ):
+            print(chunk.delta, end="", flush=True)
+        ```
+      </Tab>
+
+      <Tab title="Go">
+        ```go
+        stream, err := client.Chat.Stream(ctx, &cencori.ChatParams{
+            Model: "gpt-4o",
+            Messages: []cencori.Message{
+                {Role: "user", Content: "Tell me a story"},
+            },
+        })
+
+        for chunk := range stream {
+            if len(chunk.Choices) > 0 {
+                fmt.Print(chunk.Choices[0].Delta.Content)
+            }
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## What's included
+
+Every Cencori request automatically includes:
+
+<CardGroup cols={2}>
+  <Card title="Security filtering" icon="shield">
+    Automatic PII detection and content moderation
+  </Card>
+  <Card title="Cost tracking" icon="chart-line">
+    Real-time cost tracking per request
+  </Card>
+  <Card title="Audit logs" icon="file-lines">
+    Complete request/response logging
+  </Card>
+  <Card title="Multi-provider support" icon="network-wired">
+    Switch between OpenAI, Anthropic, Gemini easily
+  </Card>
+</CardGroup>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Core concepts" icon="book" href="/concepts/five-primitives">
+    Learn about the 5 primitives architecture
+  </Card>
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore all available endpoints
+  </Card>
+  <Card title="Multi-provider setup" icon="plug" href="/guides/multi-provider">
+    Use OpenAI, Anthropic, and Gemini
+  </Card>
+  <Card title="Streaming guide" icon="bolt" href="/guides/streaming">
+    Master real-time streaming responses
+  </Card>
+  <Card title="RAG & Memory" icon="database" href="/guides/rag-memory">
+    Build retrieval-augmented generation apps
+  </Card>
+  <Card title="Security" icon="lock" href="/security/overview">
+    Understand built-in security features
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Common use cases
+
+### Chat completions
+
+Build conversational AI with multi-turn context:
+
+```typescript
+const response = await cencori.ai.chat({
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is Cencori?' }
+  ],
+  model: 'gpt-4o',
+  temperature: 0.7
+});
+```
+
+### Switch providers
+
+Change AI providers with one parameter:
+
+```typescript
+// Use OpenAI
+const openai = await cencori.ai.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+// Use Anthropic
+const anthropic = await cencori.ai.chat({
+  model: 'claude-3-opus',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+// Use Google Gemini
+const gemini = await cencori.ai.chat({
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+```
+
+### RAG with memory
+
+Store and retrieve context for smarter responses:
+
+```typescript
+// Store a memory
+await cencori.memory.store({
+  namespace: 'docs',
+  content: 'Cencori is an AI infrastructure platform',
+  metadata: { source: 'documentation' }
+});
+
+// RAG with automatic context retrieval
+const response = await cencori.ai.rag({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'What is Cencori?' }],
+  namespace: 'docs'
+});
+```
+
+## Need help?
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="/introduction">
+    Browse the complete documentation
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/cencori/cencori">
+    View source code and examples
+  </Card>
+  <Card title="Dashboard" icon="chart-mixed" href="https://cencori.com/dashboard">
+    Manage projects and view analytics
+  </Card>
+  <Card title="Error handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Learn to handle errors gracefully
+  </Card>
+</CardGroup>

@@ -3,12 +3,6 @@ title: Integrations
 description: Connect AI to external tools and systems with secure credential management and event triggers
 ---
 
-<Note>
-  **Status**: Coming soon
-  
-  The Integrations primitive is currently in development. This page describes the planned architecture and capabilities.
-</Note>
-
 Cencori Integrations connects your AI applications to external tools and systems. Securely manage third-party credentials, trigger workflows from external events, and orchestrate multi-system automation.
 
 ## Core capabilities
@@ -35,7 +29,7 @@ Cencori Integrations connects your AI applications to external tools and systems
 Send messages, create channels, and respond to events:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.slack.sendMessage({
   channel: '#general',
   text: 'Deployment completed successfully!',
@@ -53,7 +47,7 @@ await cencori.integrations.slack.sendMessage({
 Create issues, comment on PRs, and manage repositories:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.github.createIssue({
   owner: 'your-org',
   repo: 'your-repo',
@@ -68,7 +62,7 @@ await cencori.integrations.github.createIssue({
 Query and update CRM data:
 
 ```typescript
-// Coming soon
+
 const leads = await cencori.integrations.salesforce.query(
   'SELECT Id, Name, Email FROM Lead WHERE Status = \'New\' LIMIT 10'
 );
@@ -93,7 +87,7 @@ for (const lead of leads) {
 Query databases directly from workflows:
 
 ```typescript
-// Coming soon
+
 const users = await cencori.integrations.postgres.query(
   'SELECT * FROM users WHERE created_at > $1',
   ['2026-01-01']
@@ -105,7 +99,7 @@ const users = await cencori.integrations.postgres.query(
 Access payment and customer data:
 
 ```typescript
-// Coming soon
+
 const customer = await cencori.integrations.stripe.customers.retrieve(
   'cus_abc123'
 );
@@ -126,7 +120,7 @@ Securely store and manage third-party API keys and secrets.
 ### Add credentials
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.credentials.create({
   name: 'slack-bot-token',
   type: 'api_key',
@@ -140,7 +134,7 @@ await cencori.integrations.credentials.create({
 Credentials are automatically injected when using connectors:
 
 ```typescript
-// Coming soon
+
 // Automatically uses stored credential
 await cencori.integrations.slack.sendMessage({
   channel: '#engineering',
@@ -153,7 +147,7 @@ await cencori.integrations.slack.sendMessage({
 For user-level integrations, Cencori handles the OAuth flow:
 
 ```typescript
-// Coming soon
+
 const authUrl = await cencori.integrations.github.authorize({
   scopes: ['repo', 'user'],
   redirectUri: 'https://yourapp.com/callback'
@@ -175,7 +169,7 @@ Start workflows automatically when external events occur.
 Trigger a workflow when a PR is opened:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.github.webhook.create({
   events: ['pull_request.opened'],
   workflow: 'code-review-workflow',
@@ -196,7 +190,7 @@ When a PR is opened, Cencori automatically:
 Respond to Slack messages:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.slack.event.create({
   type: 'message',
   channel: '#support',
@@ -213,7 +207,7 @@ await cencori.integrations.slack.event.create({
 Trigger workflows when database rows change:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.postgres.trigger.create({
   table: 'orders',
   operation: 'INSERT',
@@ -231,7 +225,7 @@ Build custom connectors for internal or third-party APIs.
 ### Define a connector
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.custom.create({
   name: 'internal-api',
   baseUrl: 'https://api.internal.com',
@@ -259,7 +253,7 @@ await cencori.integrations.custom.create({
 ### Use custom connector
 
 ```typescript
-// Coming soon
+
 const user = await cencori.integrations.custom('internal-api').getUser('123');
 
 await cencori.integrations.custom('internal-api').updateUser('123', {
@@ -310,7 +304,7 @@ CREATE TABLE webhooks (
 Browse and install pre-built integrations:
 
 ```typescript
-// Coming soon
+
 const integrations = await cencori.integrations.marketplace.list({
   category: 'crm',
   verified: true
@@ -379,7 +373,7 @@ if (signature !== receivedSignature) {
 Integrations respect third-party API rate limits:
 
 ```typescript
-// Coming soon
+
 await cencori.integrations.slack.sendMessage({
   channel: '#general',
   text: 'Hello!',
@@ -395,8 +389,6 @@ await cencori.integrations.slack.sendMessage({
 ```
 POST /api/integrations/{connector}
 ```
-
-**Status**: Planned
 
 ## Available connectors
 

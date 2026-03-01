@@ -3,12 +3,6 @@ title: Storage
 description: AI-native storage for vectors, audit logs, and semantic caching with PostgreSQL and Supabase
 ---
 
-<Note>
-  **Status**: Coming soon
-  
-  The Storage primitive is currently in development. This page describes the planned architecture and capabilities.
-</Note>
-
 Cencori Storage provides AI-native storage for vectors, audit logs, and semantic caching. Built on PostgreSQL with pgvector, it's optimized for RAG applications, compliance logging, and intelligent caching.
 
 ## Core capabilities
@@ -35,7 +29,7 @@ Cencori Storage provides AI-native storage for vectors, audit logs, and semantic
 Store embeddings for semantic search:
 
 ```typescript
-// Coming soon
+
 await cencori.storage.vectors.upsert([
   {
     id: 'doc-1',
@@ -63,7 +57,7 @@ await cencori.storage.vectors.upsert([
 Find similar vectors using cosine similarity:
 
 ```typescript
-// Coming soon
+
 const results = await cencori.storage.vectors.search(
   'How do I authenticate API requests?',
   {
@@ -89,7 +83,7 @@ const results = await cencori.storage.vectors.search(
 Generate embeddings automatically using Cencori's AI Gateway:
 
 ```typescript
-// Coming soon
+
 await cencori.storage.vectors.upsert([
   {
     id: 'doc-1',
@@ -170,7 +164,7 @@ CREATE TABLE api_gateway_request_logs (
 Query audit logs using the SDK:
 
 ```typescript
-// Coming soon
+
 const logs = await cencori.storage.audit.query({
   projectId: 'proj_abc123',
   startDate: '2026-01-01',
@@ -195,7 +189,7 @@ Cache AI responses based on semantic similarity to reduce costs and latency.
 4. If not found, call AI provider and cache the result
 
 ```typescript
-// Coming soon
+
 const response = await cencori.ai.chat({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: 'What is the capital of France?' }],
@@ -214,7 +208,7 @@ if (response.cached) {
 ### Cache statistics
 
 ```typescript
-// Coming soon
+
 const stats = await cencori.storage.cache.stats({
   projectId: 'proj_abc123',
   period: '7d'
@@ -237,7 +231,7 @@ Build RAG applications with automatic chunking and embedding.
 ### Add documents
 
 ```typescript
-// Coming soon
+
 await cencori.storage.knowledge.add([
   {
     content: 'Long form documentation...',
@@ -259,7 +253,7 @@ Cencori automatically:
 ### Query knowledge base
 
 ```typescript
-// Coming soon
+
 const answer = await cencori.storage.knowledge.query(
   'How do I authenticate API requests?',
   {
@@ -286,7 +280,7 @@ Store and process files for AI applications.
 ### Upload files
 
 ```typescript
-// Coming soon
+
 const file = await cencori.storage.files.upload(
   fileBlob,
   'contract.pdf',
@@ -301,7 +295,7 @@ const file = await cencori.storage.files.upload(
 Extract text, images, and tables from documents:
 
 ```typescript
-// Coming soon
+
 const processed = await cencori.storage.files.process(file.id, {
   extractText: true,
   extractImages: true,
@@ -364,8 +358,6 @@ Typical cache hit rates by use case:
 ```
 POST /api/storage/vectors
 ```
-
-**Status**: Planned
 
 ## SDK reference
 
