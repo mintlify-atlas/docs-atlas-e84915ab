@@ -1,0 +1,236 @@
+{
+  "projectType": "saas",
+  "projectName": "Cencori",
+  "projectDescription": "Unified infrastructure for AI production with built-in security, observability, and scale",
+  "theme": "aspen",
+  "primaryColor": "#3b82f6",
+  "lightColor": "#60a5fa",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/five-primitives",
+              "concepts/ai-gateway",
+              "concepts/compute",
+              "concepts/workflow",
+              "concepts/storage",
+              "concepts/integrations"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/streaming",
+              "guides/multi-provider",
+              "guides/rag-memory",
+              "guides/error-handling",
+              "guides/rate-limiting",
+              "guides/cost-optimization"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/overview",
+              "security/api-keys",
+              "security/pii-detection",
+              "security/content-filtering"
+            ]
+          },
+          {
+            "group": "Pricing & Billing",
+            "pages": [
+              "pricing/overview",
+              "pricing/credits-system",
+              "pricing/cost-tracking"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/errors"
+            ]
+          },
+          {
+            "group": "AI Gateway",
+            "pages": [
+              "api/chat",
+              "api/embeddings",
+              "api/image-generation",
+              "api/audio-transcription",
+              "api/audio-speech",
+              "api/moderation",
+              "api/rag"
+            ]
+          },
+          {
+            "group": "Memory & Storage",
+            "pages": [
+              "api/memory-store",
+              "api/memory-search"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "api/projects",
+              "api/api-keys",
+              "api/usage",
+              "api/logs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "sdks/overview",
+              "sdks/installation"
+            ]
+          },
+          {
+            "group": "TypeScript/JavaScript",
+            "pages": [
+              "sdks/typescript/quickstart",
+              "sdks/typescript/chat",
+              "sdks/typescript/streaming",
+              "sdks/typescript/memory",
+              "sdks/typescript/error-handling"
+            ]
+          },
+          {
+            "group": "Python",
+            "pages": [
+              "sdks/python/quickstart",
+              "sdks/python/chat",
+              "sdks/python/streaming",
+              "sdks/python/memory",
+              "sdks/python/error-handling"
+            ]
+          },
+          {
+            "group": "Go",
+            "pages": [
+              "sdks/go/quickstart",
+              "sdks/go/chat",
+              "sdks/go/streaming",
+              "sdks/go/memory",
+              "sdks/go/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Security Scanner",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "scan/introduction",
+              "scan/installation"
+            ]
+          },
+          {
+            "group": "Usage",
+            "pages": [
+              "scan/cli-usage",
+              "scan/ai-autofix",
+              "scan/changelog-generation",
+              "scan/ci-cd-integration"
+            ]
+          },
+          {
+            "group": "Detection Rules",
+            "pages": [
+              "scan/secrets-detection",
+              "scan/pii-detection",
+              "scan/vulnerability-detection",
+              "scan/security-scoring"
+            ]
+          },
+          {
+            "group": "Web Dashboard",
+            "pages": [
+              "scan/web-scanner",
+              "scan/github-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Framework Support",
+            "pages": [
+              "integrations/vercel-ai-sdk",
+              "integrations/langchain",
+              "integrations/crewai",
+              "integrations/autogen"
+            ]
+          },
+          {
+            "group": "Model Providers",
+            "pages": [
+              "integrations/openai",
+              "integrations/anthropic",
+              "integrations/google-gemini",
+              "integrations/custom-providers"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-provider AI Gateway with unified API",
+    "Built-in security with PII detection and content filtering",
+    "Real-time streaming with SSE support",
+    "Credits-based billing with transparent pricing",
+    "Vector storage and RAG support",
+    "Complete audit logs and observability",
+    "TypeScript, Python, and Go SDKs",
+    "Security scanner with AI-powered auto-fix",
+    "Vercel AI SDK integration",
+    "Agent framework compatibility"
+  ],
+  "publicApiSurface": [
+    "/api/ai/chat - Chat completions with streaming",
+    "/api/ai/embeddings - Vector embeddings generation",
+    "/api/ai/images/generate - AI image generation",
+    "/api/ai/audio/transcriptions - Speech-to-text",
+    "/api/ai/audio/speech - Text-to-speech",
+    "/api/ai/moderation - Content moderation",
+    "/api/ai/rag - RAG with context retrieval",
+    "/api/memory/store - Store memories for RAG",
+    "/api/memory/search - Semantic memory search",
+    "Cencori SDK - TypeScript/JavaScript client",
+    "cencori - Python client",
+    "cencori-go - Go client",
+    "@cencori/scan - Security scanner CLI",
+    "@cencori/ai-sdk - Vercel AI SDK provider"
+  ]
+}
